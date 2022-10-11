@@ -112,18 +112,12 @@ class OrdinalCutoffs(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        print("OrdinalCutoffs reset_parameters")
         with torch.no_grad():
             torch.nn.init.normal_(self.weights)
         self.weights.data.copy_(torch.sort(self.weights)[0])
 
     def forward(self, input: torch.FloatTensor) -> torch.FloatTensor:
-        print("OrdinalCutoffs")
-        res = input - self.weights
-        print("input", input)
-        print("weights", self.weights)
-        print("res", res)
-        return res
+        return input - self.weights
 
 
 @add_start_docstrings(
@@ -196,8 +190,6 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         if labels is not None:
             labels_ord_enc = ordinal_encode_labels(labels, self.num_labels)
             loss_fct = BCEWithLogitsLoss()
-            print("ordinal_logits", ordinal_logits)
-            print("labels_ord_enc", labels_ord_enc)
             loss = loss_fct(ordinal_logits, labels_ord_enc)
         if not return_dict:
             output = (ordinal_logits,) + outputs[2:]

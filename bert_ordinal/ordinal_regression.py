@@ -78,7 +78,7 @@ def ordinal_decode_labels_pt(input: torch.FloatTensor) -> torch.LongTensor:
         `torch.FloatTensor`: A PyTorch tensor typically of shape (batch_size,)
     """
     # sigmoid(0) = 0.5
-    return (input >= 0.0).sum(dim=-1) + 1
+    return (input >= 0.0).sum(dim=-1)
 
 
 def ordinal_decode_labels_np(input: numpy.array) -> numpy.array:
@@ -94,7 +94,7 @@ def ordinal_decode_labels_np(input: numpy.array) -> numpy.array:
         `numpy.array`: A numpy array typically of shape (batch_size,)
     """
     # sigmoid(0) = 0.5
-    return (input >= 0.0).sum(axis=-1) + 1
+    return (input >= 0.0).sum(axis=-1)
 
 
 class OrdinalCutoffs(nn.Module):

@@ -9,13 +9,18 @@ packages = [{include = "bert_ordinal"}]
 
 [tool.poetry.dependencies]
 python = "^3.8"
-datasets = "^2.5.2"
 transformers = "^4.22.2"
-kaggle = "^1.5.12"
-torch = "^1.12.1"
-sklearn = "^0.0"
-evaluate = "^0.2.2"
 
+numba = { version = "^0.56.3", optional = true}
+
+datasets = { version = "^2.5.2", optional = true }
+kaggle = { version = "^1.5.12", optional = true }
+evaluate = { version = "^0.2.2", optional = true }
+scikit-learn = { version = "^1.1.2", optional = true }
+
+[tool.poetry.extras]
+demos = ["datasets", "kaggle", "evaluate", "numba", "scikit-learn"]
+eval = ["numba"]
 
 [build-system]
 requires = ["poetry-core"]

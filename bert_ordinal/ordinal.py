@@ -61,7 +61,7 @@ def ordinal_encode_labels(input: torch.LongTensor, num_labels: int) -> torch.Flo
     Returns:
         `torch.FloatTensor`: A tensor of shape (batch_size, num_labels - 1)
     """
-    return (input.unsqueeze(1) >= torch.arange(1, num_labels).to(input.device)).float()
+    return (input.unsqueeze(1) >= torch.arange(1, num_labels, device=input.device)).float()
 
 
 def ordinal_decode_labels_pt(input: torch.FloatTensor) -> torch.LongTensor:

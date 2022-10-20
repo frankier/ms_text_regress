@@ -28,7 +28,11 @@ class OrdinalRegressionOutput(ModelOutput):
     Args:
         loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `labels` is provided):
             Ordinal regression loss.
-        logits (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`):
+        hidden_logits (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`):
+            Latent variable, before logits is applied.
+        task_cutoffs (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`), *optional*, returned when `task_ids` is provided):
+            Cutoffs corresponding to each task_id.
+        ordinal_logits (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`, *optional*, returned when `task_ids` is provided):
             Ordinal regression scores (before SoftMax).
         hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
             Tuple of `torch.FloatTensor` (one for the output of the embeddings, if the model has an embedding layer, +
@@ -44,7 +48,9 @@ class OrdinalRegressionOutput(ModelOutput):
     """
 
     loss: Optional[torch.FloatTensor] = None
-    logits: torch.FloatTensor = None
+    hidden_logits: torch.FloatTensor = None
+    task_cutoffs: Optional[torch.FloatTensor] = None
+    ordinal_logits: Optional[torch.FloatTensor] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 

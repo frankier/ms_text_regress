@@ -90,8 +90,8 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         pooled_output = outputs[1]
 
         pooled_output = self.dropout(pooled_output)
-        mid_logits = self.classifier(pooled_output)
-        ordinal_logits = self.cutoffs(mid_logits)
+        hidden_logits = self.classifier(pooled_output)
+        ordinal_logits = self.cutoffs(hidden_logits)
 
         loss = None
 
@@ -100,12 +100,13 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             loss_fct = BCEWithLogitsLoss()
             loss = loss_fct(ordinal_logits, labels_ord_enc)
         if not return_dict:
-            output = (ordinal_logits,) + outputs[2:]
+            output = (hidden_logits, ordinal_logits,) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
 
         return OrdinalRegressionOutput(
             loss=loss,
-            logits=ordinal_logits,
+            hidden_logits=hidden_logits,
+            ordinal_logits=ordinal_logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
@@ -153,7 +154,8 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
 
         def __init__(self, config):
             super().__init__(config)
-            self.num_labels = torch.tensor(config.num_labels)
+            self.register_buffer("num_labels", torch.tensor(config.num_labels))
+            self.num_labels: torch.Tensor
             self.config = config
 
             self.bert = BertModel(config)
@@ -209,23 +211,33 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
 
             pooled_output = outputs[1]
             pooled_output = self.dropout(pooled_output)
-            mid_logits = self.classifier(pooled_output)
-            ordinal_logits = self.cutoffs(mid_logits, task_ids)
+            hidden_logits = self.classifier(pooled_output)
+
+            ordinal_logits = None
+            task_cutoffs = None
+            if task_ids is not None:
+                ordinal_logits, task_cutoffs = self.cutoffs(hidden_logits, task_ids)
 
             loss = None
-
             if labels is not None:
+                if ordinal_logits is None:
+                    raise ValueError(
+                        "task_ids must be provided if labels are provided"
+                        " -- cannot calculate loss without a task"
+                    )
                 batch_num_labels = torch.gather(self.num_labels, 0, task_ids)
                 labels_ord_enc = ordinal_encode_multi_labels(labels, batch_num_labels)
                 loss_fct = BCEWithLogitsLoss(reduction="sum")
                 loss = bce_with_logits_ragged_mean(ordinal_logits, labels_ord_enc)
             if not return_dict:
-                output = (ordinal_logits,) + outputs[2:]
+                output = (hidden_logits, task_cutoffs, ordinal_logits,) + outputs[2:]
                 return ((loss,) + output) if loss is not None else output
 
             return OrdinalRegressionOutput(
                 loss=loss,
-                logits=ordinal_logits,
+                hidden_logits=hidden_logits,
+                task_cutoffs=task_cutoffs,
+                ordinal_logits=ordinal_logits,
                 hidden_states=outputs.hidden_states,
                 attentions=outputs.attentions,
             )

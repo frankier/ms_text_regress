@@ -63,7 +63,7 @@ def main():
         from bert_ordinal import ordinal_decode_multi_labels_pt, BertForMultiCutoffOrdinalRegression
         models.append((
             BertForMultiCutoffOrdinalRegression.from_pretrained("bert-base-cased", num_labels=num_labels),
-            ordinal_decode_multi_labels_pt
+            lambda logits: ordinal_decode_multi_labels_pt(logits[2])
         ))
     else:
         models.append((

@@ -152,9 +152,9 @@ def main():
             "rmse": (mse["mse"]) ** 0.5,
         }
         if is_multi:
-            res["qwk"] = qwk_multi_norm(predictions, labels, batch_num_labels),
+            res["qwk"] = qwk_multi_norm(predictions, labels, batch_num_labels)
         else:
-            res["qwk"] = qwk(predictions, labels, batch_num_labels),
+            res["qwk"] = qwk(predictions, labels, batch_num_labels)
         return res
 
     for model, preprocess_logits in models:

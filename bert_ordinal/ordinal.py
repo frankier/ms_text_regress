@@ -190,32 +190,35 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         """
         def __init__(self, num_labels, device=None):
             super().__init__()
-            self.weights = torch.nn.Parameter(torch.nested.nested_tensor([
+            # Could be a nested_tensor with
+            # https://github.com/pytorch/pytorch/issues/87034
+            self.weights = torch.nn.ParameterList([
                 torch.empty(cutoff_labels - 1, device=device, dtype=torch.float)
                 for cutoff_labels in num_labels
-            ]))
+            ])
             self.reset_parameters()
 
         def reset_parameters(self):
             with torch.no_grad():
-                cutoffs = self.weights.unbind()
-                for cutoff in cutoffs:
+                for cutoff in self.weights:
                     torch.nn.init.normal_(cutoff)
-                    # This is descending since we don't have nested_tensor - nested_tensor 
-                    #   https://github.com/pytorch/pytorch/issues/86889
-                    cutoff.data.copy_(torch.sort(cutoff, descending=True)[0])
+                    cutoff.data.copy_(torch.sort(cutoff)[0])
 
         def forward(self, input: torch.FloatTensor, cutoff_ids: torch.LongTensor) -> torch.FloatTensor:
-            print("input", input)
-            print("input", input[1, 0])
-            print("cutoff_ids", cutoff_ids)
-            cutoffs = self.weights.unbind()
             # Broadcasting would be nice https://github.com/pytorch/pytorch/issues/86888
             # As would getting a view into self.weights https://github.com/pytorch/pytorch/issues/86890
-            return torch.nested.as_nested_tensor([
-                input[i, 0].repeat(len(cutoffs[cutoff_ids[i]]))
+            repeated_hiddens = torch.nested.as_nested_tensor([
+                input[i, 0].repeat(len(self.weights[cutoff_ids[i]]))
                 for i in range(len(input))
-            ]) + torch.nested.nested_tensor([
+            ])
+            # This is negated here since we don't have nested_tensor - nested_tensor
+            #   https://github.com/pytorch/pytorch/issues/86889
+            pos_cutoffs = torch.nested.nested_tensor([
                 self.weights[cutoff_id]
                 for cutoff_id in cutoff_ids
             ])
+            neg_cutoffs = torch.nested.nested_tensor([
+                -self.weights[cutoff_id]
+                for cutoff_id in cutoff_ids
+            ])
+            return repeated_hiddens + neg_cutoffs, pos_cutoffs

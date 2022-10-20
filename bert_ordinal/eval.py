@@ -5,32 +5,9 @@ except ModuleNotFoundError as err:
 
 import numpy as np
 
+
 @numba.njit
-def qwk(a1: np.ndarray, a2: np.ndarray, num_labels):
-    """
-    This method calculates the Quadratic Weighted Kappa between label arrays
-    produced by two annotators -- or predicted and true labels -- `a1` and
-    `a2`.
-
-    Args:
-        a (`numpy.ndarray`)
-            An integer array of labels from annotator 1. Each labels should be
-            in the range half-open, Python-style range [0, num_labels).
-        b (`numpy.ndarray`)
-            An integer array of labels from annotator 2. Each labels should be
-            in the range half-open, Python-style range [0, num_labels).
-        num_labels (`int`):
-            The number of labels which bound the values in `a` and `b`.
-
-    Attribution:
-    This code is based on Apache-v2 licensed code (c) Jean-Francois Puget
-    Source: https://www.kaggle.com/code/cpmpml/ultra-fast-qwk-calc-method/notebook
-    """
-
-    assert(len(a1) == len(a2))
-    a1 = np.asarray(a1, dtype=np.int32)
-    a2 = np.asarray(a2, dtype=np.int32)
-
+def _jit_qwk(a1: np.ndarray, a2: np.ndarray, num_labels: int) -> float:
     hist1 = np.zeros((num_labels, ))
     hist2 = np.zeros((num_labels, ))
 
@@ -51,6 +28,34 @@ def qwk(a1: np.ndarray, a2: np.ndarray, num_labels):
     return 1 - o / e
 
 
+def qwk(a1, a2, num_labels: int) -> float:
+    """
+    This method calculates the Quadratic Weighted Kappa between label arrays
+    produced by two annotators -- or predicted and true labels -- `a1` and
+    `a2`.
+
+    Args:
+        a (`numpy.ndarray` of `int32` or convertible iterable)
+            An integer array of labels from annotator 1. Each labels should be
+            in the range half-open, Python-style range [0, num_labels).
+        b (`numpy.ndarray` of `int32` or convertible iterable)
+            An integer array of labels from annotator 2. Each labels should be
+            in the range half-open, Python-style range [0, num_labels).
+        num_labels (`int`):
+            The number of labels which bound the values in `a` and `b`.
+
+    Attribution:
+    This code is based on Apache-v2 licensed code (c) Jean-Francois Puget
+    Source: https://www.kaggle.com/code/cpmpml/ultra-fast-qwk-calc-method/notebook
+    """
+
+    if len(a1) != len(a2):
+        raise ValueError(f"Lengths of annotations passed to qwk must be equal {len(a1)} != {len(a2)}")
+    a1 = np.asarray(a1, dtype=np.int32)
+    a2 = np.asarray(a2, dtype=np.int32)
+    return _jit_qwk(a1, a2, num_labels)
+
+
 @numba.njit
 def calc_label_dist_lcm(num_labels):
     res = 1
@@ -60,37 +65,7 @@ def calc_label_dist_lcm(num_labels):
 
 
 @numba.njit
-def qwk_multi_norm(a1, a2, num_labels, label_dist_lcm=None):
-    """
-    This method calculates the Quadratic Weighted Kappa between label arrays
-    produced by two annotators -- or predicted and true labels -- `a1` and
-    `a2`. This one
-
-    Args:
-        a (`numpy.ndarray`)
-            An integer array of labels from annotator 1. Each labels should be
-            in the range half-open, Python-style range [0, num_labels).
-        b (`numpy.ndarray`)
-            An integer array of labels from annotator 2. Each labels should be
-            in the range half-open, Python-style range [0, num_labels).
-        num_labels (`numpy.ndarray`):
-            The number of labels
-        label_dist_lcm (`numpy.ndarray`, *optional*):
-            A common multiple of `num_labels[i] - 1` for all `num_labels[i]`.
-            This is typically the Lowest Common Multiple (LCM). If not
-            presupplied it will be calculated based on `num_labels`.
-
-    Attribution:
-    This code is based on Apache-v2 licensed code (c) Jean-Francois Puget
-    Source: https://www.kaggle.com/code/cpmpml/ultra-fast-qwk-calc-method/notebook
-    """
-
-    assert(len(a1) == len(a2))
-    a1 = np.asarray(a1, dtype=np.int32)
-    a2 = np.asarray(a2, dtype=np.int32)
-
-    if label_dist_lcm is None:
-        label_dist_lcm = calc_label_dist_lcm(num_labels)
+def _jit_qwk_multi_norm(a1: np.ndarray, a2: np.ndarray, num_labels, label_dist_lcm):
     max_labels = np.max(num_labels)
     hist1 = np.zeros((max_labels,), dtype=np.int32)
     hist2 = np.zeros((max_labels,), dtype=np.int32)
@@ -114,3 +89,38 @@ def qwk_multi_norm(a1, a2, num_labels, label_dist_lcm=None):
     # label_dist_lcm ** 2 factor and scaling_factor in general gets cancelled
     # out here
     return 1.0 - ((o_int * a1.shape[0]) / e_int)
+
+
+def qwk_multi_norm(a1, a2, num_labels, label_dist_lcm=None):
+    """
+    This method calculates the Quadratic Weighted Kappa between label arrays
+    produced by two annotators -- or predicted and true labels -- `a1` and
+    `a2`. This one
+
+    Args:
+        a (`numpy.ndarray` of `int32` or convertible iterable)
+            An integer array of labels from annotator 1. Each labels should be
+            in the range half-open, Python-style range [0, num_labels).
+        b (`numpy.ndarray` of `int32` or convertible iterable)
+            An integer array of labels from annotator 2. Each labels should be
+            in the range half-open, Python-style range [0, num_labels).
+        num_labels (`numpy.ndarray` of `int32` or convertible iterable)
+            The number of labels
+        label_dist_lcm (`numpy.ndarray`, *optional*):
+            A common multiple of `num_labels[i] - 1` for all `num_labels[i]`.
+            This is typically the Lowest Common Multiple (LCM). If not
+            presupplied it will be calculated based on `num_labels`.
+
+    Attribution:
+    This code is based on Apache-v2 licensed code (c) Jean-Francois Puget
+    Source: https://www.kaggle.com/code/cpmpml/ultra-fast-qwk-calc-method/notebook
+    """
+
+    if len(a1) != len(a2):
+        raise ValueError(f"Lengths of annotations passed to qwk_multi_norm must be equal {len(a1)} != {len(a2)}")
+    a1 = np.asarray(a1, dtype=np.int32)
+    a2 = np.asarray(a2, dtype=np.int32)
+    num_labels = np.asarray(num_labels, dtype=np.int32)
+    if label_dist_lcm is None:
+        label_dist_lcm = calc_label_dist_lcm(num_labels)
+    return _jit_qwk_multi_norm(a1, a2, num_labels, label_dist_lcm)

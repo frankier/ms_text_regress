@@ -23,7 +23,8 @@ jobs:
           cache: 'pip'
 
       - name: Print cache hit info
-        run: echo 'Cache hit: ${{ steps.setup_py.outputs.cache-hit }}'
+        run: |
+          echo 'Cache hit: ${{ steps.setup_py.outputs.cache-hit }}'
 
       - name: Install dependencies
         run: |

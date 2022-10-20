@@ -169,7 +169,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             `torch.nested.nested_tensor`: A ragged tensor of shape (batch_size, num_labels[i] - 1)
         """
         return torch.nested.as_nested_tensor([
-            (inp >= torch.arange(1, nl)).float()
+            (inp >= torch.arange(1, nl, device=input.device)).float()
             for inp, nl in zip(input, num_labels)
         ])
 

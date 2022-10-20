@@ -1,0 +1,33 @@
+name: Run tests
+on: [push, workflow_dispatch]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Generate requirements.txt
+        run: poetry export --without-hashes > requirements.txt && \
+          sed -i '/^torch$/d' requirements.txt
+
+      - name: Setup Python
+        id: setup_py
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Print cache hit info
+      - run: echo 'Cache hit: ${{ steps.setup_py.outputs.cache-hit }}'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run test suite
+        run: |
+          pytest tests

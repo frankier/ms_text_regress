@@ -1,5 +1,4 @@
 import argparse
-import datasets
 import numpy as np
 from transformers import (
     AutoTokenizer, TrainingArguments, BertForSequenceClassification
@@ -9,6 +8,7 @@ from bert_ordinal import (
     Trainer,
     ordinal_decode_labels_pt
 )
+from bert_ordinal.datasets import load_data
 from bert_ordinal.eval import qwk, qwk_multi_norm
 import torch
 import os
@@ -34,38 +34,6 @@ def parse_args():
     parser.add_argument("--use-deepspeed", action="store_true", default=False)
     parser.add_argument("--classification-baseline", action="store_true", default=False)
     return parser.parse_args()
-
-
-def dec_label(example):
-    return {"label": example["label"] - 1}
-
-
-def get_dataset_scale_points(dataset):
-    # XXX: Can we do this without a full dataset scan?
-    dataset_scale_points = [0] * dataset["train"].features["dataset"].num_classes
-
-    def process_row(row):
-        dataset_scale_points[row["dataset"]] = row["scale_points"]
-    dataset.map(process_row)
-    return dataset_scale_points 
-
-
-def load_data(name):
-    is_multi = False
-    if name == "shoe_reviews":
-        dataset = datasets.load_dataset("juliensimon/amazon-shoe-reviews")
-        dataset = dataset.rename_column("labels", "label")
-        num_labels = 5
-    elif name == "cross_domain_reviews":
-        dataset = datasets.load_dataset("frankier/cross_domain_reviews")
-        dataset = dataset.rename_column("rating", "label")
-        dataset = dataset.map(dec_label)
-        num_labels = get_dataset_scale_points(dataset)
-        dataset = dataset.rename_column("dataset", "task_ids")
-        is_multi = True
-    else:
-        raise RuntimeError("Unknown dataset")
-    return dataset, num_labels, is_multi
 
 
 def main():

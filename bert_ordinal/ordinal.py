@@ -85,6 +85,24 @@ def ordinal_decode_labels_pt(input: torch.FloatTensor) -> torch.LongTensor:
     return (input >= 0.0).sum(dim=-1)
 
 
+def score_labels_one_pt(input: torch.FloatTensor) -> torch.FloatTensor:
+    """
+    Scores a batch/tensor of ordinal encoded logits.
+
+    Args:
+        input (`torch.FloatTensor`):
+            A PyTorch tensor of ordinal encoded logits, of shape
+            (batch_size, num_labels - 1), typically predictions from a model
+    Returns:
+        `torch.FloatTensor`: A PyTorch tensor of scores, of shape (batch_size, num_labels)
+    """
+    gte_scores = input.sigmoid()
+    return (
+        torch.cat([torch.ones(1), gte_scores], dim=-1)
+        - torch.cat([gte_scores, torch.zeros(1)], dim=-1)
+    )
+
+
 def ordinal_decode_labels_np(input: numpy.array) -> numpy.array:
     """
     Performs ordinal decoding of a NumPy array of ordinal encoded logits into a
@@ -127,6 +145,19 @@ class OrdinalCutoffs(nn.Module):
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
     import torch.nested
     from torch.nn.functional import binary_cross_entropy_with_logits
+
+    def score_labels_ragged_pt(input: torch.FloatTensor) -> torch.FloatTensor:
+        """
+        Scores a batch/tensor of ordinal encoded logits.
+
+        Args:
+            input (`torch.FloatTensor`):
+                A PyTorch tensor of ordinal encoded logits, typically of shape
+                (batch_size, num_labels - 1), typically predictions from a model
+        Returns:
+            `torch.FloatTensor`: A PyTorch tensor typically of shape (batch_size, num_labels)
+        """
+        return torch.nested.nested_tensor([score_labels_one_pt(t) for t in input.unbind()])
 
     def bce_with_logits_ragged_mean(input: torch.Tensor, target: torch.Tensor):
         """

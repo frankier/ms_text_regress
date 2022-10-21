@@ -46,9 +46,7 @@ def main():
         return tokenizer(examples["text"], padding="max_length", truncation=True)
 
     dataset, num_labels, is_multi = load_data(args.dataset)
-    dataset = (
-        dataset.map(tokenize, batched=True)
-    )
+    dataset = dataset.map(tokenize, batched=True)
     if args.num_samples is not None:
         for label in ("train", "test"):
             dataset[label] = dataset[label].shuffle(seed=42).select(range(args.num_samples))

@@ -1,3 +1,9 @@
+"""
+This module implements contains basic NumPy and PyTorch functions and PyTorch
+modules for ordinal data and regression.  Many of these functions are not
+specific to BERT/NLP.
+"""
+
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 import packaging.version

@@ -1,3 +1,8 @@
+"""
+This module implements evaluation metrics for ordinal regression tasks including
+those with multiple scales.
+"""
+
 try:
     import numba
 except ModuleNotFoundError as err:

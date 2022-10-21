@@ -1,4 +1,10 @@
+"""
+This module contains functionality to load and preprocess open data ordinal
+regression datasets.
+"""
+
 import datasets
+from typing import Tuple, Union, List
 
 
 def dec_label(example):
@@ -15,7 +21,11 @@ def get_dataset_scale_points(dataset):
     return dataset_scale_points 
 
 
-def load_data(name):
+def load_data(name: str) -> Tuple[datasets.Dataset, Union[int, List[int]], bool]:
+    """
+    Loads either the single part/single task dataset "shoe_reviews" or the multi
+    part/multi task "cross_domain_reviews" dataset.
+    """
     is_multi = False
     if name == "shoe_reviews":
         dataset = datasets.load_dataset("juliensimon/amazon-shoe-reviews")

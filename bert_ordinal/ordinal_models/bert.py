@@ -1,3 +1,9 @@
+"""
+This module contains classes to train/evaluate BERT with ordinal regression
+heads based upon and in the style of the HuggingFace Transformers library, in
+particular the BertForSequenceClassification class.
+"""
+
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union, List
 import packaging.version

@@ -45,3 +45,7 @@ jobs:
       - name: Run test suite
         run: |
           pytest tests
+
+      - name: Run mypy
+        run: |
+          mypy

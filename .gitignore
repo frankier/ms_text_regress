@@ -1,1 +1,4 @@
-poetry.lock
+/attic/
+/poetry.lock
+/docs/_build/
+/docs/_autosummary/

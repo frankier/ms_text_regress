@@ -54,16 +54,14 @@ class OrdinalRegressionOutput(ModelOutput):
     """
 
     loss: Optional[torch.FloatTensor] = None
-    hidden_logits: torch.FloatTensor = None
+    hidden_logits: Optional[torch.FloatTensor] = None
     task_cutoffs: Optional[torch.FloatTensor] = None
     ordinal_logits: Optional[torch.FloatTensor] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 
-def ordinal_encode_labels(
-    input: torch.LongTensor, num_labels: int
-) -> torch.FloatTensor:
+def ordinal_encode_labels(input: torch.Tensor, num_labels: int) -> torch.Tensor:
     """
     Performs ordinal encoding of a batch/tensor of label indices.
 
@@ -80,7 +78,7 @@ def ordinal_encode_labels(
     ).float()
 
 
-def ordinal_decode_labels_pt(input: torch.FloatTensor) -> torch.LongTensor:
+def ordinal_decode_labels_pt(input: torch.Tensor) -> torch.Tensor:
     """
     Performs ordinal decoding of a batch/tensor of ordinal encoded logits label indices.
 
@@ -95,7 +93,7 @@ def ordinal_decode_labels_pt(input: torch.FloatTensor) -> torch.LongTensor:
     return (input >= 0.0).sum(dim=-1)
 
 
-def score_labels_one_pt(input: torch.FloatTensor) -> torch.FloatTensor:
+def score_labels_one_pt(input: torch.Tensor) -> torch.Tensor:
     """
     Scores a batch/tensor of ordinal encoded logits.
 
@@ -112,7 +110,7 @@ def score_labels_one_pt(input: torch.FloatTensor) -> torch.FloatTensor:
     )
 
 
-def ordinal_decode_labels_np(input: numpy.array) -> numpy.array:
+def ordinal_decode_labels_np(input: numpy.ndarray) -> numpy.ndarray:
     """
     Performs ordinal decoding of a NumPy array of ordinal encoded logits into a
     NumPy array of label indices.
@@ -150,7 +148,7 @@ class OrdinalCutoffs(nn.Module):
             torch.nn.init.normal_(self.weights)
         self.weights.data.copy_(torch.sort(self.weights)[0])
 
-    def forward(self, input: torch.FloatTensor) -> torch.FloatTensor:
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
         return input - self.weights
 
 
@@ -158,7 +156,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
     import torch.nested
     from torch.nn.functional import binary_cross_entropy_with_logits
 
-    def score_labels_ragged_pt(input: torch.FloatTensor) -> torch.FloatTensor:
+    def score_labels_ragged_pt(input: torch.Tensor) -> torch.Tensor:
         """
         Scores a batch/tensor of ordinal encoded logits.
 
@@ -204,7 +202,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         return torch.sum(bces / denoms) / batch_size
 
     def ordinal_encode_multi_labels(
-        input: torch.LongTensor, num_labels: torch.LongTensor
+        input: torch.Tensor, num_labels: torch.Tensor
     ) -> torch.Tensor:
         """
         Performs ordinal encoding of a batch/tensor of label indices. Each
@@ -225,9 +223,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             ]
         )
 
-    def ordinal_decode_multi_labels_pt(
-        input: torch.nested.nested_tensor,
-    ) -> torch.LongTensor:
+    def ordinal_decode_multi_labels_pt(input: torch.Tensor) -> torch.Tensor:
         return torch.tensor(
             [torch.count_nonzero(t >= 0.0) for t in input.unbind()], device=input.device
         )
@@ -261,8 +257,8 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                     cutoff.data.copy_(torch.sort(cutoff)[0])
 
         def forward(
-            self, input: torch.FloatTensor, cutoff_ids: torch.LongTensor
-        ) -> torch.FloatTensor:
+            self, input: torch.Tensor, cutoff_ids: torch.Tensor
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
             # Broadcasting would be nice https://github.com/pytorch/pytorch/issues/86888
             # As would getting a view into self.weights https://github.com/pytorch/pytorch/issues/86890
             repeated_hiddens = torch.nested.as_nested_tensor(

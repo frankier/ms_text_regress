@@ -12,7 +12,7 @@ def dec_label(example):
     return {"label": example["label"] - 1}
 
 
-def get_dataset_scale_points(dataset):
+def get_dataset_scale_points(dataset) -> List[int]:
     # XXX: Can we do this without a full dataset scan?
     dataset_scale_points = [0] * dataset["train"].features["dataset"].num_classes
 
@@ -23,18 +23,24 @@ def get_dataset_scale_points(dataset):
     return dataset_scale_points
 
 
-def load_data(name: str) -> Tuple[datasets.Dataset, Union[int, List[int]], bool]:
+def load_data(name: str) -> Tuple[datasets.DatasetDict, Union[int, List[int]], bool]:
     """
     Loads either the single part/single task dataset "shoe_reviews" or the multi
     part/multi task "cross_domain_reviews" dataset.
     """
+    dataset: datasets.DatasetDict
+    num_labels: Union[int, List[int]]
     is_multi = False
     if name == "shoe_reviews":
-        dataset = datasets.load_dataset("juliensimon/amazon-shoe-reviews")
+        d = datasets.load_dataset("juliensimon/amazon-shoe-reviews")
+        assert isinstance(d, datasets.DatasetDict)
+        dataset = d
         dataset = dataset.rename_column("labels", "label")
         num_labels = 5
     elif name == "cross_domain_reviews":
-        dataset = datasets.load_dataset("frankier/cross_domain_reviews")
+        d = datasets.load_dataset("frankier/cross_domain_reviews")
+        assert isinstance(d, datasets.DatasetDict)
+        dataset = d
         dataset = dataset.rename_column("rating", "label")
         dataset = dataset.map(dec_label)
         num_labels = get_dataset_scale_points(dataset)

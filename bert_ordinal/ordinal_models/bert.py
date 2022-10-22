@@ -147,7 +147,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
     class BertMultiLabelsConfig(BertConfig):
         # Overwrite num_labels <=> id2label behaviour
         @property
-        def num_labels(self) -> int:
+        def num_labels(self) -> List[int]:
             return self._num_labels
 
         @num_labels.setter
@@ -237,7 +237,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
 
             loss = None
             if labels is not None:
-                if ordinal_logits is None:
+                if task_ids is None or ordinal_logits is None:
                     raise ValueError(
                         "task_ids must be provided if labels are provided"
                         " -- cannot calculate loss without a task"

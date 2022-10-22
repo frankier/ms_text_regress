@@ -28,9 +28,7 @@ def _jit_qwk(a1: np.ndarray, a2: np.ndarray, num_labels: int) -> float:
         for j in range(num_labels):
             e += hist1[i] * hist2[j] * (i - j) * (i - j)
 
-    e = e / a1.shape[0]
-
-    return 1 - o / e
+    return 1 - o / (e / a1.shape[0])
 
 
 def qwk(a1, a2, num_labels: int) -> float:

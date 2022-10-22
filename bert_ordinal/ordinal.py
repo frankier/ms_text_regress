@@ -6,23 +6,23 @@ specific to BERT/NLP.
 
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
-import packaging.version
 
 import numpy
+import packaging.version
 import torch
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import BCEWithLogitsLoss
+from transformers.models.bert.modeling_bert import (
+    BERT_INPUTS_DOCSTRING,
+    BERT_START_DOCSTRING,
+    BertModel,
+    BertPreTrainedModel,
+)
 from transformers.utils import (
     ModelOutput,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
-)
-from transformers.models.bert.modeling_bert import (
-    BERT_START_DOCSTRING,
-    BERT_INPUTS_DOCSTRING,
-    BertPreTrainedModel,
-    BertModel
 )
 
 
@@ -61,7 +61,9 @@ class OrdinalRegressionOutput(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 
-def ordinal_encode_labels(input: torch.LongTensor, num_labels: int) -> torch.FloatTensor:
+def ordinal_encode_labels(
+    input: torch.LongTensor, num_labels: int
+) -> torch.FloatTensor:
     """
     Performs ordinal encoding of a batch/tensor of label indices.
 
@@ -73,7 +75,9 @@ def ordinal_encode_labels(input: torch.LongTensor, num_labels: int) -> torch.Flo
     Returns:
         `torch.FloatTensor`: A tensor of shape (batch_size, num_labels - 1)
     """
-    return (input.unsqueeze(1) >= torch.arange(1, num_labels, device=input.device)).float()
+    return (
+        input.unsqueeze(1) >= torch.arange(1, num_labels, device=input.device)
+    ).float()
 
 
 def ordinal_decode_labels_pt(input: torch.FloatTensor) -> torch.LongTensor:
@@ -103,9 +107,8 @@ def score_labels_one_pt(input: torch.FloatTensor) -> torch.FloatTensor:
         `torch.FloatTensor`: A PyTorch tensor of scores, of shape (batch_size, num_labels)
     """
     gte_scores = input.sigmoid()
-    return (
-        torch.cat([torch.ones(1), gte_scores], dim=-1)
-        - torch.cat([gte_scores, torch.zeros(1)], dim=-1)
+    return torch.cat([torch.ones(1), gte_scores], dim=-1) - torch.cat(
+        [gte_scores, torch.zeros(1)], dim=-1
     )
 
 
@@ -134,9 +137,12 @@ class OrdinalCutoffs(nn.Module):
         num_labels (`int`):
             The number of labels
     """
+
     def __init__(self, num_labels, device=None):
         super().__init__()
-        self.weights = torch.nn.Parameter(torch.empty(num_labels - 1, device=device, dtype=torch.float))
+        self.weights = torch.nn.Parameter(
+            torch.empty(num_labels - 1, device=device, dtype=torch.float)
+        )
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -163,7 +169,9 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         Returns:
             `torch.FloatTensor`: A PyTorch tensor typically of shape (batch_size, num_labels)
         """
-        return torch.nested.nested_tensor([score_labels_one_pt(t) for t in input.unbind()])
+        return torch.nested.nested_tensor(
+            [score_labels_one_pt(t) for t in input.unbind()]
+        )
 
     def bce_with_logits_ragged_mean(input: torch.Tensor, target: torch.Tensor):
         """
@@ -182,23 +190,22 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         """
         batch_size = input.size(0)
         bces = binary_cross_entropy_with_logits(
-            input.values(),
-            target.values(),
-            reduction="none"
+            input.values(), target.values(), reduction="none"
         )
         # XXX: Better floating point precision might be possible here by
         # grouping tensors by length and summing, then dividing them all at
         # once, and then summing again
-        denoms = torch.hstack([
-            torch.full(
-                (len(t),), len(t),
-                device=input.device,
-                dtype=torch.float
-            ) for t in input.unbind()
-        ])
+        denoms = torch.hstack(
+            [
+                torch.full((len(t),), len(t), device=input.device, dtype=torch.float)
+                for t in input.unbind()
+            ]
+        )
         return torch.sum(bces / denoms) / batch_size
 
-    def ordinal_encode_multi_labels(input: torch.LongTensor, num_labels: torch.LongTensor) -> torch.Tensor:
+    def ordinal_encode_multi_labels(
+        input: torch.LongTensor, num_labels: torch.LongTensor
+    ) -> torch.Tensor:
         """
         Performs ordinal encoding of a batch/tensor of label indices. Each
         label `input[i]`, has a corresponding number of labels `num_labels[i]`.
@@ -211,15 +218,18 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         Returns:
             `torch.nested.nested_tensor`: A ragged tensor of shape (batch_size, num_labels[i] - 1)
         """
-        return torch.nested.as_nested_tensor([
-            (inp >= torch.arange(1, nl, device=input.device)).float()
-            for inp, nl in zip(input, num_labels)
-        ])
+        return torch.nested.as_nested_tensor(
+            [
+                (inp >= torch.arange(1, nl, device=input.device)).float()
+                for inp, nl in zip(input, num_labels)
+            ]
+        )
 
-    def ordinal_decode_multi_labels_pt(input: torch.nested.nested_tensor) -> torch.LongTensor:
+    def ordinal_decode_multi_labels_pt(
+        input: torch.nested.nested_tensor,
+    ) -> torch.LongTensor:
         return torch.tensor(
-            [torch.count_nonzero(t >= 0.0) for t in input.unbind()], 
-            device=input.device
+            [torch.count_nonzero(t >= 0.0) for t in input.unbind()], device=input.device
         )
 
     class MultiOrdinalCutoffs(nn.Module):
@@ -231,14 +241,17 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             num_labels (`int`):
                 The number of labels
         """
+
         def __init__(self, num_labels, device=None):
             super().__init__()
             # Could be a nested_tensor with
             # https://github.com/pytorch/pytorch/issues/87034
-            self.weights = torch.nn.ParameterList([
-                torch.empty(cutoff_labels - 1, device=device, dtype=torch.float)
-                for cutoff_labels in num_labels
-            ])
+            self.weights = torch.nn.ParameterList(
+                [
+                    torch.empty(cutoff_labels - 1, device=device, dtype=torch.float)
+                    for cutoff_labels in num_labels
+                ]
+            )
             self.reset_parameters()
 
         def reset_parameters(self):
@@ -247,21 +260,23 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                     torch.nn.init.normal_(cutoff)
                     cutoff.data.copy_(torch.sort(cutoff)[0])
 
-        def forward(self, input: torch.FloatTensor, cutoff_ids: torch.LongTensor) -> torch.FloatTensor:
+        def forward(
+            self, input: torch.FloatTensor, cutoff_ids: torch.LongTensor
+        ) -> torch.FloatTensor:
             # Broadcasting would be nice https://github.com/pytorch/pytorch/issues/86888
             # As would getting a view into self.weights https://github.com/pytorch/pytorch/issues/86890
-            repeated_hiddens = torch.nested.as_nested_tensor([
-                input[i, 0].repeat(len(self.weights[cutoff_ids[i]]))
-                for i in range(len(input))
-            ])
+            repeated_hiddens = torch.nested.as_nested_tensor(
+                [
+                    input[i, 0].repeat(len(self.weights[cutoff_ids[i]]))
+                    for i in range(len(input))
+                ]
+            )
             # This is negated here since we don't have nested_tensor - nested_tensor
             #   https://github.com/pytorch/pytorch/issues/86889
-            pos_cutoffs = torch.nested.nested_tensor([
-                self.weights[cutoff_id]
-                for cutoff_id in cutoff_ids
-            ])
-            neg_cutoffs = torch.nested.nested_tensor([
-                -self.weights[cutoff_id]
-                for cutoff_id in cutoff_ids
-            ])
+            pos_cutoffs = torch.nested.nested_tensor(
+                [self.weights[cutoff_id] for cutoff_id in cutoff_ids]
+            )
+            neg_cutoffs = torch.nested.nested_tensor(
+                [-self.weights[cutoff_id] for cutoff_id in cutoff_ids]
+            )
             return repeated_hiddens + neg_cutoffs, pos_cutoffs

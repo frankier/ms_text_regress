@@ -3,8 +3,9 @@ This module contains functionality to load and preprocess open data ordinal
 regression datasets.
 """
 
+from typing import List, Tuple, Union
+
 import datasets
-from typing import Tuple, Union, List
 
 
 def dec_label(example):
@@ -17,8 +18,9 @@ def get_dataset_scale_points(dataset):
 
     def process_row(row):
         dataset_scale_points[row["dataset"]] = row["scale_points"]
+
     dataset.map(process_row)
-    return dataset_scale_points 
+    return dataset_scale_points
 
 
 def load_data(name: str) -> Tuple[datasets.Dataset, Union[int, List[int]], bool]:

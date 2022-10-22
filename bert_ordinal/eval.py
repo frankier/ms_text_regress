@@ -13,8 +13,8 @@ import numpy as np
 
 @numba.njit
 def _jit_qwk(a1: np.ndarray, a2: np.ndarray, num_labels: int) -> float:
-    hist1 = np.zeros((num_labels, ))
-    hist2 = np.zeros((num_labels, ))
+    hist1 = np.zeros((num_labels,))
+    hist2 = np.zeros((num_labels,))
 
     o = 0
     for k in range(a1.shape[0]):
@@ -55,7 +55,9 @@ def qwk(a1, a2, num_labels: int) -> float:
     """
 
     if len(a1) != len(a2):
-        raise ValueError(f"Lengths of annotations passed to qwk must be equal {len(a1)} != {len(a2)}")
+        raise ValueError(
+            f"Lengths of annotations passed to qwk must be equal {len(a1)} != {len(a2)}"
+        )
     a1 = np.asarray(a1, dtype=np.int32)
     a2 = np.asarray(a2, dtype=np.int32)
     return _jit_qwk(a1, a2, num_labels)
@@ -83,7 +85,7 @@ def _jit_qwk_multi_norm(a1: np.ndarray, a2: np.ndarray, num_labels, label_dist_l
         scaling_factor = label_dist_lcm // (num_labels[k] - 1)
         hist1[i] += scaling_factor
         hist2[j] += scaling_factor
-        o_int += (i - j) ** 2 * scaling_factor ** 2
+        o_int += (i - j) ** 2 * scaling_factor**2
 
     e_int = 0
     for i in range(max_labels):
@@ -122,7 +124,9 @@ def qwk_multi_norm(a1, a2, num_labels, label_dist_lcm=None):
     """
 
     if len(a1) != len(a2):
-        raise ValueError(f"Lengths of annotations passed to qwk_multi_norm must be equal {len(a1)} != {len(a2)}")
+        raise ValueError(
+            f"Lengths of annotations passed to qwk_multi_norm must be equal {len(a1)} != {len(a2)}"
+        )
     a1 = np.asarray(a1, dtype=np.int32)
     a2 = np.asarray(a2, dtype=np.int32)
     num_labels = np.asarray(num_labels, dtype=np.int32)

@@ -5,32 +5,32 @@ particular the BertForSequenceClassification class.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union, List
-import packaging.version
+from typing import List, Optional, Tuple, Union
 
 import numpy
+import packaging.version
 import torch
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn import BCEWithLogitsLoss
+from transformers import Trainer as OriginalHFTrainer
+from transformers.models.bert.modeling_bert import (
+    BERT_INPUTS_DOCSTRING,
+    BERT_START_DOCSTRING,
+    BertConfig,
+    BertModel,
+    BertPreTrainedModel,
+)
 from transformers.utils import (
     ModelOutput,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
 )
-from transformers.models.bert.modeling_bert import (
-    BERT_START_DOCSTRING,
-    BERT_INPUTS_DOCSTRING,
-    BertPreTrainedModel,
-    BertModel,
-    BertConfig
-)
-from transformers import Trainer as OriginalHFTrainer
 
 from bert_ordinal.ordinal import (
     OrdinalCutoffs,
     OrdinalRegressionOutput,
-    ordinal_encode_labels
+    ordinal_encode_labels,
 )
 
 
@@ -49,7 +49,9 @@ class BertForOrdinalRegression(BertPreTrainedModel):
 
         self.bert = BertModel(config)
         classifier_dropout = (
-            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
+            config.classifier_dropout
+            if config.classifier_dropout is not None
+            else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
         self.classifier = nn.Linear(config.hidden_size, 1)
@@ -58,8 +60,9 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         # Initialize weights and apply final processing
         self.post_init()
 
-
-    @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+    @add_start_docstrings_to_model_forward(
+        BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+    )
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,
@@ -79,7 +82,9 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
             `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
         """
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
 
         outputs = self.bert(
             input_ids,
@@ -106,7 +111,10 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             loss_fct = BCEWithLogitsLoss()
             loss = loss_fct(ordinal_logits, labels_ord_enc)
         if not return_dict:
-            output = (hidden_logits, ordinal_logits,) + outputs[2:]
+            output = (
+                hidden_logits,
+                ordinal_logits,
+            ) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
 
         return OrdinalRegressionOutput(
@@ -123,7 +131,7 @@ class NestedTensorTrainerMixin:
         if getattr(tensor, "is_nested", False):
             return tensor
         return super()._pad_across_processes(tensor, *args, **kwargs)
-        
+
 
 class Trainer(NestedTensorTrainerMixin, OriginalHFTrainer):
     pass
@@ -132,10 +140,9 @@ class Trainer(NestedTensorTrainerMixin, OriginalHFTrainer):
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
     from bert_ordinal.ordinal import (
         MultiOrdinalCutoffs,
+        bce_with_logits_ragged_mean,
         ordinal_encode_multi_labels,
-        bce_with_logits_ragged_mean
     )
-
 
     class BertMultiLabelsConfig(BertConfig):
         # Overwrite num_labels <=> id2label behaviour
@@ -146,7 +153,6 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         @num_labels.setter
         def num_labels(self, num_labels: List[int]):
             self._num_labels = num_labels
-
 
     @add_start_docstrings(
         """
@@ -166,7 +172,9 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
 
             self.bert = BertModel(config)
             classifier_dropout = (
-                config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
+                config.classifier_dropout
+                if config.classifier_dropout is not None
+                else config.hidden_dropout_prob
             )
             self.dropout = nn.Dropout(classifier_dropout)
             self.classifier = nn.Linear(config.hidden_size, 1)
@@ -175,8 +183,9 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             # Initialize weights and apply final processing
             self.post_init()
 
-
-        @add_start_docstrings_to_model_forward(BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length"))
+        @add_start_docstrings_to_model_forward(
+            BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+        )
         def forward(
             self,
             input_ids: Optional[torch.Tensor] = None,
@@ -201,7 +210,9 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                 config.num_labels[task_id])`. An ordinal regression loss --- binary
                 cross entropy on the ordinal encoded labels --- is always used.
             """
-            return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+            return_dict = (
+                return_dict if return_dict is not None else self.config.use_return_dict
+            )
 
             outputs = self.bert(
                 input_ids,
@@ -236,7 +247,11 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                 loss_fct = BCEWithLogitsLoss(reduction="sum")
                 loss = bce_with_logits_ragged_mean(ordinal_logits, labels_ord_enc)
             if not return_dict:
-                output = (hidden_logits, task_cutoffs, ordinal_logits,) + outputs[2:]
+                output = (
+                    hidden_logits,
+                    task_cutoffs,
+                    ordinal_logits,
+                ) + outputs[2:]
                 return ((loss,) + output) if loss is not None else output
 
             return OrdinalRegressionOutput(

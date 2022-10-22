@@ -6,7 +6,7 @@ build:
     python: "3.10"
   jobs:
     pre_create_environment:
-      - python3 -m venv /opt/poetry_home &&
+      - python3 -m venv /opt/poetry_home
       - /opt/poetry_home/bin/pip install poetry==1.2.0
       - poetry export --dev --without-hashes > requirements.txt
       - sed -i '/^torch$/d' requirements.txt

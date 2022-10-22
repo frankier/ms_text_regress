@@ -30,11 +30,15 @@ jobs:
           $POETRY_HOME/bin/poetry export --with=dev --without-hashes -o requirements.txt &&
           sed -i '/^torch$/d' requirements.txt
 
-      - name: Print cache hit info
-        run: |
-          echo 'Cache hit: ${{ steps.setup_py.outputs.cache-hit }}'
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.local
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('requirements.txt') }}
 
       - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: |
           pip install -r requirements.txt
 

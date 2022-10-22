@@ -8,7 +8,7 @@ build:
     pre_create_environment:
       - python3 -m venv ~/poetry_home
       - ~/poetry_home/bin/pip install poetry==1.2.0
-      - ~/poetry_home/bin/poetry export --with=dev --without-hashes -o requirements.txt
+      - ~/poetry_home/bin/poetry export --extras demos --with=dev --without-hashes -o requirements.txt
       - sed -i '/^torch$/d' requirements.txt
 
 sphinx:

@@ -27,7 +27,7 @@ jobs:
 
       - name: Generate requirements.txt
         run: |
-          $POETRY_HOME/bin/poetry export --without-hashes > requirements.txt &&
+          $POETRY_HOME/bin/poetry export --with=dev --without-hashes -o requirements.txt &&
           sed -i '/^torch$/d' requirements.txt
 
       - name: Print cache hit info

@@ -26,7 +26,9 @@ jobs:
         run: |
           poetry export --extras demos --with=dev --without-hashes -o requirements.txt &&
           sed -i '/^torch$/d' requirements.txt &&
-          echo '-e .' >> requirements.txt
+          echo '-e .' >> requirements.txt &&
+          echo '--extra-index-url https://download.pytorch.org/whl/nightly/cpu' >> requirements.txt &&
+          echo 'torch' >> requirements.txt
 
       - name: Load cached venv
         id: cached-poetry-dependencies

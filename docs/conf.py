@@ -14,7 +14,7 @@ release = '0.0.1'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = ['myst_parser', 'sphinx.ext.autosummary']
+extensions = ['myst_parser', 'sphinx.ext.autosummary', 'sphinx_autodoc_typehints']
 source_suffix = ['.rst', '.md']
 
 templates_path = ['_templates']

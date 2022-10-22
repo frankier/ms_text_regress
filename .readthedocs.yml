@@ -10,6 +10,7 @@ build:
       - ~/poetry_home/bin/pip install poetry==1.2.0
       - ~/poetry_home/bin/poetry export --extras demos --with=dev --without-hashes -o requirements.txt
       - sed -i '/^torch$/d' requirements.txt
+      - echo '-e .' >> requirements.txt
 
 sphinx:
    configuration: docs/conf.py

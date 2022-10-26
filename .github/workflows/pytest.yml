@@ -25,8 +25,7 @@ jobs:
       - name: Generate requirements.txt
         run: |
           poetry export --extras demos --with=dev --without-hashes -o requirements.txt &&
-          sed -i '/^torch$/d' requirements.txt &&
-
+          sed -i '/^torch$/d' requirements.txt
       - name: Load cached venv
         id: cached-poetry-dependencies
         uses: actions/cache@v3

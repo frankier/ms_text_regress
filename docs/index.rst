@@ -31,6 +31,8 @@ Modules
    :maxdepth: 2
    :caption: Contents:
 
+   datasets
+
 Indices and tables
 ------------------
 

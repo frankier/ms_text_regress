@@ -1,0 +1,6 @@
+[submodule "datasets/multiscale_rotten_tomatoes_critic_reviews"]
+	path = datasets/multiscale_rotten_tomatoes_critic_reviews
+	url = https://huggingface.co/datasets/frankier/multiscale_rotten_tomatoes_critic_reviews
+[submodule "datasets/cross_domain_reviews"]
+	path = datasets/cross_domain_reviews
+	url = https://huggingface.co/datasets/frankier/cross_domain_reviews

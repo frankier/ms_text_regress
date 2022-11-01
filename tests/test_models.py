@@ -4,7 +4,6 @@ tests, just to test that training and evaluation can run on a single example.
 """
 import os
 
-from datasets import load_dataset
 from transformers import TrainingArguments
 
 from bert_ordinal import (
@@ -12,6 +11,7 @@ from bert_ordinal import (
     BertForOrdinalRegression,
     Trainer,
 )
+from datasets import load_dataset
 
 FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),

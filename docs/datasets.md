@@ -15,4 +15,6 @@ are:
 
 The function to load them is:
 
+```{eval-rst}
 .. autofunction:: bert_ordinal.datasets.load_data
+```

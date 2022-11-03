@@ -18,20 +18,12 @@ Modules
 
 .. currentmodule:: bert_ordinal
 
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   ordinal_models.bert
-   datasets
-   ordinal
-   eval
-
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
    datasets
+   modules
 
 Indices and tables
 ------------------

@@ -1,0 +1,48 @@
+rule all:
+    input:
+        "work/build_all"
+
+
+rule build_all:
+    input:
+        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.arrow"
+    output:
+        touch("work/build_all")
+
+
+rule push_all:
+    input:
+        "work/rt_critics/pushed"
+    output:
+        touch("work/push_all")
+
+
+rule download_rt_critics:
+    output:
+        directory("work/rt_critics/raw")
+    shell:
+        "python -m ordinal_nlp_dataproc.rt_critics.download {output}"
+
+
+rule normalize_rt_critics:
+    input:
+        "work/rt_critics/raw"
+    output:
+        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.arrow"
+    shell:
+        "python -m ordinal_nlp_dataproc.rt_critics.normalize {input}/rotten_tomatoes_critic_reviews.csv.zip {output}"
+
+
+rule push_rt_critics:
+    input:
+        "work/rt_critics/raw",
+        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.arrow"
+    output:
+        touch("work/rt_critics/pushed")
+
+
+rule download_cd_reviews:
+    output:
+        directory("work/cd_reviews/raw")
+    shell:
+        "python -m ordinal_nlp_dataproc.cd_reviews.download {output}"

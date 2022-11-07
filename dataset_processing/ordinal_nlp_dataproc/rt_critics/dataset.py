@@ -10,6 +10,11 @@ The clean up process drops anything without both a review and a rating, as well
 as standardising the ratings onto several integer, ordinal scales.
 """
 
+import os
+
+import pandas
+from sklearn.model_selection import train_test_split
+
 import datasets
 
 
@@ -51,20 +56,20 @@ def split_dfs(df):
         add_group(group_df, publisher_name, grade_type)
     train_df = pandas.concat(train_dfs)
     test_df = pandas.concat(test_dfs)
-    group_id_df = pandas.dataframe.from_dict(
+    group_id_df = pandas.DataFrame.from_dict(
         {k: v for k, v in group_cols.items() if k != "scale_points"}
     )
-    group_id_df.set_index(["publisher_name", "grade_type"], inplace=true)
+    group_id_df.set_index(["publisher_name", "grade_type"], inplace=True)
     train_df = train_df.join(group_id_df, on=["publisher_name", "grade_type"])
     test_df = test_df.join(group_id_df, on=["publisher_name", "grade_type"])
     df = df.join(group_id_df, on=["publisher_name", "grade_type"])
-    group_df = pandas.dataframe.from_dict(group_cols)
+    group_df = pandas.DataFrame.from_dict(group_cols)
     return df, train_df, test_df, group_df
 
 
 def get_datasets():
-    movies_df = pandas.read_csv(sys.environ["MOVIES_CSV"])
-    review_df = pandas.read_arrow(sys.environ["CRITIC_REVIEWS_ARROW"])
+    movies_df = pandas.read_csv(os.environ["MOVIES_CSV"])
+    review_df = pandas.read_parquet(os.environ["CRITIC_REVIEWS_PQ"])
     joined_df = review_df.join(
         movies_df.set_index("rotten_tomatoes_link"), "rotten_tomatoes_link"
     )

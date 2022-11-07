@@ -259,55 +259,6 @@ def normalize_reviews(review_df):
     return working_review_df
 
 
-def split_dfs(df):
-    train_dfs = []
-    test_dfs = []
-    split_groups = []
-    small_groups = []
-    for (publisher_name, grade_type), group_df in df.groupby(
-        ["publisher_name", "grade_type"]
-    ):
-        if len(group_df) < 50:
-            small_groups.append((publisher_name, grade_type, group_df))
-        else:
-            split_groups.append((publisher_name, grade_type, group_df))
-    group_id = 0
-    group_cols = {
-        "publisher_name": [],
-        "grade_type": [],
-        "group_id": [],
-        "scale_points": [],
-    }
-
-    def add_group(group_df, publisher_name, grade_type):
-        nonlocal group_id
-        group_cols["publisher_name"].append(publisher_name)
-        group_cols["grade_type"].append(grade_type)
-        group_cols["group_id"].append(group_id)
-        group_cols["scale_points"].append(group_df.iloc[0]["scale_points"])
-        group_id += 1
-
-    for publisher_name, grade_type, group_df in split_groups:
-        train_df, test_df = train_test_split(group_df, test_size=0.2)
-        train_dfs.append(train_df)
-        test_dfs.append(test_df)
-        add_group(group_df, publisher_name, grade_type)
-    for publisher_name, grade_type, group_df in small_groups:
-        train_dfs.append(group_df)
-        add_group(group_df, publisher_name, grade_type)
-    train_df = pandas.concat(train_dfs)
-    test_df = pandas.concat(test_dfs)
-    group_id_df = pandas.DataFrame.from_dict(
-        {k: v for k, v in group_cols.items() if k != "scale_points"}
-    )
-    group_id_df.set_index(["publisher_name", "grade_type"], inplace=True)
-    train_df = train_df.join(group_id_df, on=["publisher_name", "grade_type"])
-    test_df = test_df.join(group_id_df, on=["publisher_name", "grade_type"])
-    df = df.join(group_id_df, on=["publisher_name", "grade_type"])
-    group_df = pandas.DataFrame.from_dict(group_cols)
-    return df, train_df, test_df, group_df
-
-
 @click.command()
 @click.argument("inf")
 @click.argument("outf")

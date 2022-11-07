@@ -5,7 +5,7 @@ rule all:
 
 rule build_all:
     input:
-        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.arrow"
+        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.parquet"
     output:
         touch("work/build_all")
 
@@ -28,17 +28,21 @@ rule normalize_rt_critics:
     input:
         "work/rt_critics/raw"
     output:
-        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.arrow"
+        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.parquet"
     shell:
         "python -m ordinal_nlp_dataproc.rt_critics.normalize {input}/rotten_tomatoes_critic_reviews.csv.zip {output}"
 
 
 rule push_rt_critics:
     input:
-        "work/rt_critics/raw",
-        "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.arrow"
+        raw_csvs = "work/rt_critics/raw",
+        reviews_proc = "work/rt_critics/normalized_rotten_tomatoes_critic_reviews.parquet"
     output:
         touch("work/rt_critics/pushed")
+    shell:
+        "MOVIES_CSV={input.raw_csvs}/rotten_tomatoes_movies.csv.zip "
+        "CRITIC_REVIEWS_PQ={input.reviews_proc} "
+        "python -m ordinal_nlp_dataproc.rt_critics.push"
 
 
 rule download_cd_reviews:

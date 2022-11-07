@@ -1,10 +1,18 @@
 import argparse
 import os
+import sys
+from dataclasses import dataclass
+from typing import Optional
 
 import evaluate
 import numpy as np
 import torch
-from transformers import AutoTokenizer, BertForSequenceClassification, TrainingArguments
+from transformers import (
+    AutoTokenizer,
+    BertForSequenceClassification,
+    HfArgumentParser,
+    TrainingArguments,
+)
 
 from bert_ordinal import BertForOrdinalRegression, Trainer, ordinal_decode_labels_pt
 from bert_ordinal.datasets import load_data
@@ -19,46 +27,67 @@ metric_mse = evaluate.load("mse")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--lr", default=1e-5, type=float, help="Learning rate, default: %(default)f"
-    )
-    parser.add_argument(
-        "--epochs",
-        default=3.0,
-        type=float,
-        help="Training epochs, default: %(default)d",
-    )
-    parser.add_argument(
-        "--dataset", default="cross_domain_reviews", help="The dataset to use"
-    )
-    parser.add_argument(
-        "--num-samples", type=int, help="how far to subsample the datset"
-    )
-    parser.add_argument("--threads", type=int, help="number of cpu threads to set")
-    parser.add_argument("--use-ipex", action="store_true", default=False)
-    parser.add_argument("--use-deepspeed", action="store_true", default=False)
-    parser.add_argument("--classification-baseline", action="store_true", default=False)
-    return parser.parse_args()
+@dataclass
+class ExtraArguments:
+    dataset: str
+    num_samples: Optional[int] = None
+    threads: Optional[int] = None
+    classification_baseline: bool = False
+    trace_labels_predictions: bool = False
+    num_dataset_proc: Optional[int] = None
+    warm_dataset_cache: bool = False
+
+
+_tokenizer = None
+
+
+def get_tokenizer():
+    global _tokenizer
+    if _tokenizer is None:
+        _tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+    return _tokenizer
+
+
+def tokenize(text):
+    tokenizer = get_tokenizer()
+    return tokenizer(text, padding="max_length", truncation=True, return_tensors="np")
 
 
 def main():
-    args = parse_args()
+    parser = HfArgumentParser((TrainingArguments, ExtraArguments))
+
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+        # If we pass only one argument to the script and it's the path to a json file,
+        # let's parse it to get our arguments.
+        training_args, args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1])
+        )
+    else:
+        training_args, args = parser.parse_args_into_dataclasses()
+
+    # args = parse_args()
     if args.threads:
         torch.set_num_threads(args.threads)
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
-    def tokenize(examples):
-        return tokenizer(examples["text"], padding="max_length", truncation=True)
-
-    dataset, num_labels, is_multi = load_data(args.dataset)
-    dataset = dataset.map(tokenize, batched=True)
+    dataset, num_labels, is_multi = load_data(
+        args.dataset, num_dataset_proc=args.num_dataset_proc
+    )
+    dataset = dataset.map(
+        tokenize,
+        input_columns="text",
+        batched=True,
+        desc="Tokenizing",
+        num_proc=args.num_dataset_proc,
+    )
     if args.num_samples is not None:
         for label in ("train", "test"):
             dataset[label] = (
                 dataset[label].shuffle(seed=42).select(range(args.num_samples))
             )
+    if args.warm_dataset_cache:
+        print("Dataset cache warmed")
+        return
+
     models = []
     if is_multi:
         import packaging.version
@@ -110,19 +139,8 @@ def main():
     else:
         label_names = None
 
-    training_args = TrainingArguments(
-        output_dir="train_out",
-        logging_strategy="epoch",
-        warmup_ratio=0.1,
-        learning_rate=args.lr,
-        lr_scheduler_type="linear",
-        num_train_epochs=args.epochs,
-        evaluation_strategy="epoch",
-        label_names=label_names,
-        optim="adamw_torch",
-        use_ipex=args.use_ipex,
-        deepspeed=args.use_deepspeed,
-    )
+    training_args.label_names = label_names
+    training_args.optim = "adamw_torch"
 
     def compute_metrics(eval_pred):
         predictions, labels = eval_pred
@@ -134,10 +152,12 @@ def main():
         else:
             batch_num_labels = num_labels
 
-        print()
-        print("Computing metrics based upon")
-        print("labels", labels)
-        print("predictions", predictions)
+        if args.trace_labels_predictions:
+            print()
+            print("Computing metrics based upon")
+            print("labels", labels)
+            print("predictions", predictions)
+
         mse = metric_mse.compute(predictions=predictions, references=labels)
         res = {
             **metric_accuracy.compute(predictions=predictions, references=labels),

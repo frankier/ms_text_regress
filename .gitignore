@@ -2,3 +2,6 @@
 /poetry.lock
 /docs/_build/
 /docs/_autosummary/
+/venv/
+/dataset_processing/.snakemake/
+/dataset_processing/work/

@@ -133,10 +133,11 @@ def common_denom_grades(group_df):
     num = common_denom * group_df["orig_num"].to_numpy()
     denom = common_denom * group_df["orig_denom"].to_numpy()
     group_df["label"] = np_round(num)
-    group_df["scale_points"] = np_round(denom)
+    round_denom = np_round(denom)
     group_df["non_neg_error"] = (abs(group_df["label"] - num) >= 0.05) | (
-        abs(group_df["scale_points"] - denom) >= 0.05
+        abs(round_denom - denom) >= 0.05
     )
+    group_df["scale_points"] = round_denom + 1
     return group_df
 
 

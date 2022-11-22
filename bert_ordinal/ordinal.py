@@ -23,10 +23,8 @@ class OrdinalRegressionOutput(ModelOutput):
     Args:
         loss (`torch.FloatTensor` of shape `(1,)`, *optional*, returned when `labels` is provided):
             Ordinal regression loss.
-        hidden_logits (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`):
+        hidden_linear (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`):
             Latent variable, before logits is applied.
-        task_cutoffs (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`), *optional*, returned when `task_ids` is provided):
-            Cutoffs corresponding to each task_id.
         ordinal_logits (`torch.FloatTensor` of shape `(batch_size, config.num_labels)`, *optional*, returned when `task_ids` is provided):
             Ordinal regression scores (before SoftMax).
         hidden_states (`tuple(torch.FloatTensor)`, *optional*, returned when `output_hidden_states=True` is passed or when `config.output_hidden_states=True`):
@@ -43,8 +41,7 @@ class OrdinalRegressionOutput(ModelOutput):
     """
 
     loss: Optional[torch.FloatTensor] = None
-    hidden_logits: Optional[torch.FloatTensor] = None
-    task_cutoffs: Optional[torch.FloatTensor] = None
+    hidden_linear: Optional[torch.FloatTensor] = None
     ordinal_logits: Optional[torch.FloatTensor] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
     attentions: Optional[Tuple[torch.FloatTensor]] = None
@@ -52,7 +49,9 @@ class OrdinalRegressionOutput(ModelOutput):
 
 def ordinal_encode_labels(input: torch.Tensor, num_labels: int) -> torch.Tensor:
     """
-    Performs ordinal encoding of a batch/tensor of label indices.
+    Performs ordinal encoding of a batch/tensor of label indices. This is
+    equivalent to the ordinal encoding of the forward cumulative probability
+    multinomial-ordinal family.
 
     Args:
         input (`torch.LongTensor`):
@@ -115,30 +114,70 @@ def ordinal_decode_labels_np(input: numpy.ndarray) -> numpy.ndarray:
     return (input >= 0.0).sum(axis=-1)
 
 
-class OrdinalCutoffs(nn.Module):
+class ElementWiseAffine(nn.Module):
     """
-    This layer keeps track of the cutoff points between the ordered classes (in
-    logit space).
+    This layer does a slightly specialised element-wise affine transform of an
+    single ordered scale into num_labels - 1 predictors ready to be used as
+    logits with an something from the ELMO family. It induces cutoff points
+    between the ordered classes (in logit space).
+
+    The main ordinal-regression specific functionality is:
+
+     1) Different choices of discrimination modes, including none, a single, and
+        multi which has a discrimination per δ_k.
+     2) Different initialisation modes to reasonable values for the offsets.
 
     Args:
+        with_discrimination: ("none" | "single" | "multi")
+            Whether to have not discrimination parameters, a single common one,
+            or one per threshold.
         num_labels (`int`):
             The number of labels
+        device (`torch.device`) *optional*:
+            The device to put the parameters on
     """
 
-    def __init__(self, num_labels, device=None):
+    def __init__(self, with_discrimination, num_labels, device=None):
         super().__init__()
-        self.weights = torch.nn.Parameter(
+        if with_discrimination == "none":
+            self.discrimination = torch.ones(1)
+        elif with_discrimination == "single":
+            self.discrimination = nn.Parameter(torch.ones(1))
+        elif with_discrimination == "multi":
+            self.discrimination = nn.Parameter(torch.ones(num_labels - 1))
+        else:
+            raise ValueError(
+                f"Unknown discrimination type: {with_discrimination}, "
+                "must be one of ('none', 'single', 'multi')"
+            )
+        self.offsets = torch.nn.Parameter(
             torch.empty(num_labels - 1, device=device, dtype=torch.float)
         )
         self.reset_parameters()
 
     def reset_parameters(self):
+        # TODO: reasonable initialisation probably depends on the link used
         with torch.no_grad():
-            torch.nn.init.normal_(self.weights)
-        self.weights.data.copy_(torch.sort(self.weights)[0])
+            torch.nn.init.normal_(self.offsets)
+        self.offsets.data.copy_(torch.sort(self.offsets)[0])
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return input - self.weights
+        return self.discrimination * (input + self.offsets)
+
+    def summary(self):
+        return self.discrimination, self.offsets
+
+
+DEFAULT_DISCRIMINATION_MODE = "none"
+
+
+def ordinal_loss(
+    input: torch.Tensor, target: torch.Tensor, link: str, num_labels: int
+) -> torch.Tensor:
+    target_enc, weights = link(target, num_labels)
+    return binary_cross_entropy_with_logits(
+        input, target_enc, weights, reduction="sum"
+    ) / weights.sum(1)
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):

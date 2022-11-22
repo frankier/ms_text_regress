@@ -4,15 +4,12 @@ heads based upon and in the style of the HuggingFace Transformers library, in
 particular the BertForSequenceClassification class.
 """
 
-from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
-import numpy
 import packaging.version
 import torch
 import torch.utils.checkpoint
 from torch import nn
-from torch.nn import BCEWithLogitsLoss
 from transformers import Trainer as OriginalHFTrainer
 from transformers.models.bert.modeling_bert import (
     BERT_INPUTS_DOCSTRING,
@@ -22,16 +19,35 @@ from transformers.models.bert.modeling_bert import (
     BertPreTrainedModel,
 )
 from transformers.utils import (
-    ModelOutput,
     add_start_docstrings,
     add_start_docstrings_to_model_forward,
 )
 
+from bert_ordinal.element_link import DEFAULT_LINK_NAME, get_link_by_name
 from bert_ordinal.ordinal import (
-    OrdinalCutoffs,
+    DEFAULT_DISCRIMINATION_MODE,
+    ElementWiseAffine,
     OrdinalRegressionOutput,
-    ordinal_encode_labels,
+    ordinal_loss,
 )
+
+
+class OrdinalConfigMixin:
+    def __init__(
+        self,
+        link=DEFAULT_LINK_NAME,
+        discrimination_mode=DEFAULT_DISCRIMINATION_MODE,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+
+        self.link = link
+        self.discrimination_mode = discrimination_mode
+
+
+class OrdinalBertConfig(OrdinalConfigMixin, BertConfig):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 
 @add_start_docstrings(
@@ -42,10 +58,13 @@ from bert_ordinal.ordinal import (
     BERT_START_DOCSTRING,
 )
 class BertForOrdinalRegression(BertPreTrainedModel):
+    config_class = OrdinalBertConfig
+
     def __init__(self, config):
         super().__init__(config)
         self.num_labels = config.num_labels
         self.config = config
+        self.link = get_link_by_name(self.config.link)
 
         self.bert = BertModel(config)
         classifier_dropout = (
@@ -55,7 +74,7 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         )
         self.dropout = nn.Dropout(classifier_dropout)
         self.classifier = nn.Linear(config.hidden_size, 1)
-        self.cutoffs = OrdinalCutoffs(config.num_labels)
+        self.cutoffs = ElementWiseAffine(config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -107,9 +126,7 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         loss = None
 
         if labels is not None:
-            labels_ord_enc = ordinal_encode_labels(labels, self.num_labels)
-            loss_fct = BCEWithLogitsLoss()
-            loss = loss_fct(ordinal_logits, labels_ord_enc)
+            loss = ordinal_loss(ordinal_logits, labels, self.link, self.num_labels)
         if not return_dict:
             output = (
                 hidden_logits,
@@ -138,13 +155,12 @@ class Trainer(NestedTensorTrainerMixin, OriginalHFTrainer):
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
-    from bert_ordinal.ordinal import (
-        MultiOrdinalCutoffs,
-        bce_with_logits_ragged_mean,
-        ordinal_encode_multi_labels,
-    )
+    from bert_ordinal.ordinal import MultiElementWiseAffine, ordinal_loss_multi_labels
 
-    class BertMultiLabelsConfig(BertConfig):
+    class BertMultiLabelsConfig(OrdinalConfigMixin, BertConfig):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+
         # Overwrite num_labels <=> id2label behaviour
         @property
         def num_labels(self) -> List[int]:
@@ -169,6 +185,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             self.register_buffer("num_labels", torch.tensor(config.num_labels))
             self.num_labels: torch.Tensor
             self.config = config
+            self.link = get_link_by_name(self.config.link)
 
             self.bert = BertModel(config)
             classifier_dropout = (
@@ -178,7 +195,9 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             )
             self.dropout = nn.Dropout(classifier_dropout)
             self.classifier = nn.Linear(config.hidden_size, 1)
-            self.cutoffs = MultiOrdinalCutoffs(config.num_labels)
+            self.cutoffs = MultiElementWiseAffine(
+                config.discrimination_mode, config.num_labels
+            )
 
             # Initialize weights and apply final processing
             self.post_init()
@@ -228,12 +247,11 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
 
             pooled_output = outputs[1]
             pooled_output = self.dropout(pooled_output)
-            hidden_logits = self.classifier(pooled_output)
+            hidden_linear = self.classifier(pooled_output)
 
             ordinal_logits = None
-            task_cutoffs = None
             if task_ids is not None:
-                ordinal_logits, task_cutoffs = self.cutoffs(hidden_logits, task_ids)
+                ordinal_logits = self.cutoffs(hidden_linear, task_ids)
 
             loss = None
             if labels is not None:
@@ -243,21 +261,19 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                         " -- cannot calculate loss without a task"
                     )
                 batch_num_labels = torch.gather(self.num_labels, 0, task_ids)
-                labels_ord_enc = ordinal_encode_multi_labels(labels, batch_num_labels)
-                loss_fct = BCEWithLogitsLoss(reduction="sum")
-                loss = bce_with_logits_ragged_mean(ordinal_logits, labels_ord_enc)
+                loss = ordinal_loss_multi_labels(
+                    ordinal_logits, labels, self.link, batch_num_labels
+                )
             if not return_dict:
                 output = (
-                    hidden_logits,
-                    task_cutoffs,
+                    hidden_linear,
                     ordinal_logits,
                 ) + outputs[2:]
                 return ((loss,) + output) if loss is not None else output
 
             return OrdinalRegressionOutput(
                 loss=loss,
-                hidden_logits=hidden_logits,
-                task_cutoffs=task_cutoffs,
+                hidden_linear=hidden_linear,
                 ordinal_logits=ordinal_logits,
                 hidden_states=outputs.hidden_states,
                 attentions=outputs.attentions,

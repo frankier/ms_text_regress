@@ -97,19 +97,17 @@ def main():
                 f"Warning: multi-scale datasets such as {args.dataset} are not support with torch < 1.13",
                 file=sys.stderr,
             )
-        from bert_ordinal import (
-            BertForMultiCutoffOrdinalRegression,
-            ordinal_decode_multi_labels_pt,
-        )
+        from bert_ordinal import BertForMultiCutoffOrdinalRegression
 
-        models.append(
-            (
-                BertForMultiCutoffOrdinalRegression.from_pretrained(
-                    "bert-base-cased", num_labels=num_labels
-                ),
-                lambda logits: ordinal_decode_multi_labels_pt(logits[2]),
-            )
+        bert_mcor = BertForMultiCutoffOrdinalRegression.from_pretrained(
+            "bert-base-cased", num_labels=num_labels
         )
+        link = bert_mcor.link
+
+        def proc_multiord_logits(logits):
+            return torch.hstack([link.top_from_logits(li) for li in logits[1].unbind()])
+
+        models.append((bert_mcor, proc_multiord_logits))
     else:
         models.append(
             (

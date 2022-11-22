@@ -172,12 +172,13 @@ DEFAULT_DISCRIMINATION_MODE = "none"
 
 
 def ordinal_loss(
-    input: torch.Tensor, target: torch.Tensor, link: str, num_labels: int
+    input: torch.Tensor, target: torch.Tensor, link, num_labels: int
 ) -> torch.Tensor:
-    target_enc, weights = link(target, num_labels)
-    return binary_cross_entropy_with_logits(
-        input, target_enc, weights, reduction="sum"
-    ) / weights.sum(1)
+    target_enc, weights = link.link(target, num_labels)
+    return (
+        binary_cross_entropy_with_logits(input, target_enc, weights, reduction="sum")
+        / weights.sum(1)
+    ).sum()
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):

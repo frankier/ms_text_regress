@@ -73,8 +73,8 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = nn.Linear(config.hidden_size, 1)
-        self.cutoffs = ElementWiseAffine(config.num_labels)
+        self.classifier = nn.Linear(config.hidden_size, 1, bias=False)
+        self.cutoffs = ElementWiseAffine(config.discrimination_mode, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -120,8 +120,8 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         pooled_output = outputs[1]
 
         pooled_output = self.dropout(pooled_output)
-        hidden_logits = self.classifier(pooled_output)
-        ordinal_logits = self.cutoffs(hidden_logits)
+        hidden_linear = self.classifier(pooled_output)
+        ordinal_logits = self.cutoffs(hidden_linear)
 
         loss = None
 
@@ -129,14 +129,14 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             loss = ordinal_loss(ordinal_logits, labels, self.link, self.num_labels)
         if not return_dict:
             output = (
-                hidden_logits,
+                hidden_linear,
                 ordinal_logits,
             ) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
 
         return OrdinalRegressionOutput(
             loss=loss,
-            hidden_logits=hidden_logits,
+            hidden_linear=hidden_linear,
             ordinal_logits=ordinal_logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
@@ -194,7 +194,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                 else config.hidden_dropout_prob
             )
             self.dropout = nn.Dropout(classifier_dropout)
-            self.classifier = nn.Linear(config.hidden_size, 1)
+            self.classifier = nn.Linear(config.hidden_size, 1, bias=False)
             self.cutoffs = MultiElementWiseAffine(
                 config.discrimination_mode, config.num_labels
             )

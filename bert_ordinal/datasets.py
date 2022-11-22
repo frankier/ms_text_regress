@@ -5,6 +5,10 @@ regression datasets.
 
 from typing import List, Optional, Tuple, Union
 
+import pandas
+import pyarrow
+from sklearn.model_selection import train_test_split
+
 import datasets
 
 
@@ -23,6 +27,166 @@ def get_dataset_scale_points_cdr(dataset) -> List[int]:
     return dataset_scale_points
 
 
+def find_num_downsampled_groups(max_dataset_size, group_sizes):
+    for num_downsampled_groups in range(1, len(group_sizes) + 1):
+        next_group_size = (
+            group_sizes.iloc[num_downsampled_groups]
+            if num_downsampled_groups < len(group_sizes)
+            else 0
+        )
+        rest_size = group_sizes.iloc[num_downsampled_groups:].sum()
+        available_samples = max_dataset_size - rest_size
+        samples_per_downsampled_group = available_samples / num_downsampled_groups
+        if samples_per_downsampled_group >= next_group_size:
+            break
+    return num_downsampled_groups
+
+
+def downsample_large_groups(
+    df, group_keys, max_dataset_size, ignore_threshold=0, discard_ignore=False
+):
+    groups = df.groupby(group_keys)
+    group_sizes = groups.size()
+    group_sizes.sort_values(ascending=False, inplace=True)
+    ignore_idx = (-group_sizes).searchsorted(-ignore_threshold, side="right")
+    ignored_groups = group_sizes.iloc[ignore_idx:]
+    group_sizes = group_sizes.iloc[:ignore_idx]
+    num_downsampled_groups = find_num_downsampled_groups(max_dataset_size, group_sizes)
+    # Add back in non-downsampled groups
+    new_df_groups = [
+        groups.get_group(group) for group in group_sizes.index[num_downsampled_groups:]
+    ]
+    if not discard_ignore:
+        for group in ignored_groups.index:
+            print(group)
+        # Add back in ignored groups
+        new_df_groups.extend(
+            (groups.get_group(group) for group in ignored_groups.index)
+        )
+    for downsample_group_idx in range(num_downsampled_groups - 1, -1, -1):
+        available_samples = max_dataset_size - sum(
+            (len(group) for group in new_df_groups)
+        )
+        samples_per_downsampled_group = available_samples / (downsample_group_idx + 1)
+        group = group_sizes.index[downsample_group_idx]
+        new_df_groups.append(
+            groups.get_group(group).iloc[: int(samples_per_downsampled_group + 0.5)]
+        )
+    return pandas.concat(new_df_groups)
+
+
+def downsample_large_groups_groupwise(
+    df, outer_group_keys, inner_group_keys, max_dataset_size
+):
+    groups = df.groupby(outer_group_keys)
+    group_sizes = groups.size()
+    group_sizes.sort_values(ascending=False, inplace=True)
+    num_downsampled_groups = find_num_downsampled_groups(max_dataset_size, group_sizes)
+    # Add back in non-downsampled groups
+    new_df_groups = [
+        groups.get_group(group) for group in group_sizes.index[num_downsampled_groups:]
+    ]
+    for downsample_group_idx in range(num_downsampled_groups):
+        available_samples = max_dataset_size - sum(
+            (len(group) for group in new_df_groups)
+        )
+        samples_per_downsampled_group = available_samples / (
+            num_downsampled_groups - downsample_group_idx
+        )
+        group = group_sizes.index[downsample_group_idx]
+        inner_groups = groups.get_group(group).groupby(inner_group_keys)
+        inner_group_sizes = inner_groups.size()
+        inner_group_sizes.sort_values(ascending=False, inplace=True)
+        if downsample_group_idx < num_downsampled_groups - 1:
+            side = "right"
+        else:
+            side = "left"
+        sample_idx = inner_group_sizes.cumsum().searchsorted(
+            samples_per_downsampled_group, side=side
+        )
+        new_df_groups.extend(
+            (
+                inner_groups.get_group(group)
+                for group in inner_group_sizes.index[:sample_idx]
+            )
+        )
+    return pandas.concat(new_df_groups)
+
+
+def renumber_groups(df, group_key):
+    groups = df.groupby(group_key)
+    group_sizes = groups.size()
+    group_sizes.sort_values(ascending=False, inplace=True)
+    group_renumbering = {group: idx for idx, group in enumerate(group_sizes.index)}
+    df[group_key] = df[group_key].map(group_renumbering)
+    return df
+
+
+def _stratified_split(split_groups, test_size=0.25, shuffle=True, random_state=None):
+    train_dfs = []
+    test_dfs = []
+    for group_df in split_groups:
+        train_df, test_df = train_test_split(
+            group_df, test_size=test_size, shuffle=shuffle, random_state=random_state
+        )
+        train_dfs.append(train_df)
+        test_dfs.append(test_df)
+    return train_dfs, test_dfs
+
+
+def stratified_split(df, group_keys, test_size=0.25, shuffle=True, random_state=None):
+    train_dfs, test_dfs = _stratified_split(
+        (group_df for _key, group_df in df.groupby(group_keys)),
+        test_size=test_size,
+        shuffle=shuffle,
+        random_state=random_state,
+    )
+    return pandas.concat(train_dfs), pandas.concat(test_dfs)
+
+
+def stratified_split_large(
+    df,
+    group_keys,
+    large_threshold,
+    test_size=0.25,
+    small_target="train",
+    shuffle=True,
+    random_state=None,
+):
+    if small_target == "separate":
+        small_dfs = []
+    split_groups = []
+    small_groups = []
+    for _key, group_df in df.groupby(group_keys):
+        if len(group_df) < large_threshold:
+            small_groups.append(group_df)
+        else:
+            split_groups.append(group_df)
+    train_dfs, test_dfs = _stratified_split(
+        split_groups, test_size=test_size, shuffle=shuffle, random_state=random_state
+    )
+    for group_df in small_groups:
+        if small_target == "train":
+            train_dfs.append(group_df)
+        elif small_target == "test":
+            test_dfs.append(group_df)
+        elif small_target == "separate":
+            small_dfs.append(group_df)
+        elif small_target == "drop":
+            pass
+        else:
+            raise ValueError(
+                f"Unknown small_target {small_target}, must be one of train, test, separate, drop"
+            )
+    train_df = pandas.concat(train_dfs)
+    test_df = pandas.concat(test_dfs)
+    if small_target == "separate":
+        small_df = pandas.concat(small_dfs)
+        return train_df, test_df, small_df
+    else:
+        return train_df, test_df
+
+
 def get_dataset_scale_points_rt(dataset) -> List[int]:
     dataset_scale_points = []
 
@@ -35,6 +199,14 @@ def get_dataset_scale_points_rt(dataset) -> List[int]:
 
     dataset.map(process_row, desc="Getting scale points")
     return dataset_scale_points
+
+
+def sample_multiscale_rt_critics(batch):
+    df = pandas.DataFrame.from_dict(batch.data)
+    df = df.sample(frac=1, random_state=42).reset_index(drop=True)
+    df = downsample_large_groups_groupwise(df, "grade_type", "group_id", 40000)
+    df = renumber_groups(df, "group_id")
+    return pyarrow.Table.from_pandas(df)
 
 
 def load_data(
@@ -66,8 +238,25 @@ def load_data(
     elif name == "multiscale_rt_critics":
         d = datasets.load_dataset("frankier/processed_multiscale_rt_critics")
         assert isinstance(d, datasets.DatasetDict)
-        # DatasetDict({k: v for k, v in d.items() if k in ("train", "test")})
-        dataset = d
+        d = d.map(sample_multiscale_rt_critics, batched=True, batch_size=None)
+        """
+        df = pandas.DataFrame(d["train"])
+        df = df.sample(frac=1).reset_index(drop=True)
+        df = downsample_large_groups_groupwise(df, "grade_type", "group_id", 40000)
+        df = renumber_groups(df, "group_id")
+        """
+        # df = stratified_split(df, ["grade_type", "group_id"], shuffle=True)
+        # train_df, test_df = train_test_split(df, test_size=0.25, stratify=df[['grade_type', 'group_id']].to_records(index=False))
+        df = pandas.DataFrame(d["train"])
+        train_df, test_df = stratified_split_large(
+            df, ["grade_type", "group_id"], 10, small_target="drop"
+        )
+        dataset = datasets.DatasetDict(
+            {
+                "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
+                "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
+            }
+        )
         dataset = dataset.rename_columns(
             {
                 "group_id": "task_ids",

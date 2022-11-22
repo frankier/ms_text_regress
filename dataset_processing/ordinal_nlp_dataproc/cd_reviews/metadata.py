@@ -28,7 +28,7 @@ class SplitHFSrc:
     name: str
 
     def load(self):
-        return load_dataset(self.name, streaming=True)
+        return load_dataset(self.name)["all"]
 
 
 @dataclass
@@ -36,12 +36,7 @@ class TrainOnlyHFSrc:
     name: str
 
     def load(self):
-        if hasattr(self, "_cached"):
-            return self._cached
-        self._cached = load_dataset(self.name)["train"].train_test_split(
-            test_size=0.5, seed=42
-        )
-        return self._cached
+        return load_dataset(self.name)["train"]
 
 
 _kaggle_api = None
@@ -63,21 +58,17 @@ class KaggleSrc:
     name: str
     file: str
 
-    def load(self):
+    def dir_name(self, base):
+        return self.name.replace("/", "__")
+
+    def download(self, base):
         if hasattr(self, "_cached"):
             return self._cached
         kaggle_api = get_kaggle_api()
-        dir_name = self.name.replace("/", "__")
-        if os.path.exists(dir_name):
-            shutil.rmtree(dir_name)
-        os.mkdir(dir_name)
-        try:
-            file_path = pjoin(dir_name, self.file.rsplit("/", 1)[-1])
-            kaggle_api.dataset_download_file(self.name, self.file, path=dir_name)
-            dataset = load_dataset("csv", data_files=file_path + ".zip")
-            return dataset["train"].train_test_split(test_size=0.5, seed=42)
-        finally:
-            shutil.rmtree(dir_name)
+        kaggle_api.dataset_download_file(self.name, self.file, path=self.dir_name(base))
+
+    def path(self, base):
+        return pjoin(self.dir_name(base), self.file.rsplit("/", 1)[-1]) + ".zip"
 
 
 DATASETS = [

@@ -57,8 +57,6 @@ def downsample_large_groups(
         groups.get_group(group) for group in group_sizes.index[num_downsampled_groups:]
     ]
     if not discard_ignore:
-        for group in ignored_groups.index:
-            print(group)
         # Add back in ignored groups
         new_df_groups.extend(
             (groups.get_group(group) for group in ignored_groups.index)

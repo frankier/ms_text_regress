@@ -100,14 +100,15 @@ class BertForMultiScaleSequenceClassification(BertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)
         logits_pad = None
         if task_ids is not None:
-            logits = torch.nested.as_nested_tensor(
-                [
-                    self.classifiers[task_id](pooled_output).squeeze(0)
-                    for task_id in task_ids
-                ]
-            )
             # XXX: Need loss function + argmax implemented for nested_tensor to remove this
-            logits_pad = logits.to_padded_tensor(-100)
+            logits_pad = torch.nn.utils.rnn.pad_sequence(
+                [
+                    self.classifiers[task_id](out).squeeze(0)
+                    for task_id, out in zip(task_ids, pooled_output)
+                ],
+                batch_first=True,
+                padding_value=-100,
+            )
 
         loss = None
         if labels is not None:

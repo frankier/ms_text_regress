@@ -156,19 +156,13 @@ class Trainer(NestedTensorTrainerMixin, OriginalHFTrainer):
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
     from bert_ordinal.ordinal import MultiElementWiseAffine, ordinal_loss_multi_labels
+    from bert_ordinal.transformers_utils import BertMultiLabelsMixin
 
-    class BertMultiLabelsConfig(OrdinalConfigMixin, BertConfig):
+    class BertOrdinalMultiLabelsConfig(
+        OrdinalConfigMixin, BertMultiLabelsMixin, BertConfig
+    ):
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
-
-        # Overwrite num_labels <=> id2label behaviour
-        @property
-        def num_labels(self) -> List[int]:
-            return self._num_labels
-
-        @num_labels.setter
-        def num_labels(self, num_labels: List[int]):
-            self._num_labels = num_labels
 
     @add_start_docstrings(
         """
@@ -178,7 +172,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         BERT_START_DOCSTRING,
     )
     class BertForMultiScaleOrdinalRegression(BertPreTrainedModel):
-        config_class = BertMultiLabelsConfig
+        config_class = BertOrdinalMultiLabelsConfig
 
         def __init__(self, config):
             super().__init__(config)

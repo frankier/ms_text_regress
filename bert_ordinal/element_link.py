@@ -98,7 +98,7 @@ class ElementLink:
         Returns:
             `torch.FloatTensor`: A PyTorch tensor of label probabilities, of shape (batch_size, num_labels)
         """
-        return cls.label_dist_from_preds(F.sigmoid(logits))
+        return cls.label_dist_from_preds(logits.sigmoid())
 
     @classmethod
     def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:

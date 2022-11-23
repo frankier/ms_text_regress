@@ -4,6 +4,7 @@ tests, just to test that training and evaluation can run on a single example.
 """
 import os
 
+import pytest
 from transformers import TrainingArguments
 
 from bert_ordinal import (
@@ -19,10 +20,16 @@ FIXTURE_DIR = os.path.join(
 )
 
 
+BASE = "bert-base-cased"
+TOKENIZER = BASE
+# BASE = "prajjwal1/bert-tiny"
+# TOKENIZER = "bert-base-uncased"
+
+
 def tokenize_dataset(dataset):
     from transformers import AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER)
 
     def tokenize(examples):
         return tokenizer(examples["text"], padding="max_length", truncation=True)
@@ -47,7 +54,20 @@ def mk_toy_trainer(tmp_path, model, dataset):
     )
 
 
-def test_bert_for_ordinal_regression(tmp_path):
+LINKS = [
+    "fwd_cumulative",
+    "bwd_cumulative",
+    "fwd_sratio",
+    "bwd_sratio",
+    "fwd_cratio",
+    "bwd_cratio",
+    "fwd_acat",
+    "bwd_acat",
+]
+
+
+@pytest.mark.parametrize("link", LINKS)
+def test_bert_for_ordinal_regression(tmp_path, link):
     dataset = tokenize_dataset(
         load_dataset(
             "json", data_files=os.path.join(FIXTURE_DIR, "tiny_shoe_reviews.json")
@@ -56,7 +76,7 @@ def test_bert_for_ordinal_regression(tmp_path):
     num_labels = 5
 
     model = BertForOrdinalRegression.from_pretrained(
-        "bert-base-cased", num_labels=num_labels
+        BASE, num_labels=num_labels, link=link
     )
     trained = mk_toy_trainer(tmp_path, model, dataset).train()
     assert trained.global_step == 1
@@ -72,7 +92,7 @@ def test_bert_for_multi_ordinal_regression(tmp_path):
     num_labels = [5, 10]
 
     model = BertForMultiScaleOrdinalRegression.from_pretrained(
-        "bert-base-cased", num_labels=num_labels
+        BASE, num_labels=num_labels
     )
     trained = mk_toy_trainer(tmp_path, model, dataset).train()
     assert trained.global_step == 1

@@ -12,6 +12,9 @@ from bert_ordinal import (
     BertForOrdinalRegression,
     Trainer,
 )
+from bert_ordinal.baseline_models.classification import (
+    BertForMultiScaleSequenceClassification,
+)
 from datasets import load_dataset
 
 FIXTURE_DIR = os.path.join(
@@ -47,6 +50,8 @@ def mk_toy_trainer(tmp_path, model, dataset):
             lr_scheduler_type="linear",
             warmup_ratio=0.5,
             num_train_epochs=1,
+            per_device_train_batch_size=2,
+            per_device_eval_batch_size=2,
             optim="adamw_torch",
         ),
         train_dataset=dataset,
@@ -82,7 +87,8 @@ def test_bert_for_ordinal_regression(tmp_path, link):
     assert trained.global_step == 1
 
 
-def test_bert_for_multi_ordinal_regression(tmp_path):
+@pytest.fixture
+def multiscale_dataset():
     dataset = tokenize_dataset(
         load_dataset(
             "json",
@@ -90,8 +96,22 @@ def test_bert_for_multi_ordinal_regression(tmp_path):
         )["train"]
     )
     num_labels = [5, 10]
+    return dataset, num_labels
 
+
+@pytest.mark.parametrize("link", LINKS)
+def test_bert_for_multi_ordinal_regression(tmp_path, link, multiscale_dataset):
+    dataset, num_labels = multiscale_dataset
     model = BertForMultiScaleOrdinalRegression.from_pretrained(
+        BASE, num_labels=num_labels, link=link
+    )
+    trained = mk_toy_trainer(tmp_path, model, dataset).train()
+    assert trained.global_step == 1
+
+
+def test_bert_for_multi_scale_classification(tmp_path, multiscale_dataset):
+    dataset, num_labels = multiscale_dataset
+    model = BertForMultiScaleSequenceClassification.from_pretrained(
         BASE, num_labels=num_labels
     )
     trained = mk_toy_trainer(tmp_path, model, dataset).train()

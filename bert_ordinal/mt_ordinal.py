@@ -72,7 +72,7 @@ def bce_with_logits_ragged_mean(
 
 def ordinal_encode_multi_labels(
     link, target: torch.Tensor, num_labels: torch.Tensor
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
     """
     Performs EL-MO encoding of a batch/tensor of label indices. Each label
     `input[i]`, has a corresponding number of labels `num_labels[i]`.
@@ -88,19 +88,24 @@ def ordinal_encode_multi_labels(
         `torch.nested.nested_tensor`: A ragged tensor of shape (batch_size, num_labels[i] - 1)
     """
     target_enc = []
-    weights = []
-    for inp, nl in zip(target, num_labels):
+    weights = None
+    for inp, nl in zip(target, num_labels, strict=True):
         one_target_enc, one_weights = link.link(inp, nl)
         target_enc.append(one_target_enc)
-        weights.append(one_weights)
-    return torch.nested.as_nested_tensor(target_enc), torch.nested.as_nested_tensor(
-        weights
+        if one_weights is not None:
+            if weights is None:
+                weights = []
+            weights.append(one_weights)
+    target_tensor = torch.nested.as_nested_tensor(target_enc)
+    return (
+        target_tensor,
+        torch.nested.as_nested_tensor(weights) if weights is not None else None,
     )
 
 
 def ordinal_loss_multi_labels(
     input: torch.Tensor, target: torch.Tensor, link, num_labels: torch.Tensor
-):
+) -> torch.Tensor:
     target_enc, weights = ordinal_encode_multi_labels(link, target, num_labels)
     return bce_with_logits_ragged_mean(input, target_enc, weights)
 
@@ -165,9 +170,7 @@ class MultiElementWiseAffine(nn.Module):
                 torch.nn.init.normal_(offset)
                 offset.data.copy_(torch.sort(offset)[0])
 
-    def forward(
-        self, input: torch.Tensor, task_ids: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, input: torch.Tensor, task_ids: torch.Tensor) -> torch.Tensor:
         # Broadcasting would be nice https://github.com/pytorch/pytorch/issues/86888
         # As would getting a view into self.offsets https://github.com/pytorch/pytorch/issues/86890
         repeated_hiddens = torch.nested.as_nested_tensor(

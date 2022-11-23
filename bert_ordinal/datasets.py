@@ -186,7 +186,7 @@ def stratified_split_large(
 
 
 def get_dataset_scale_points_rt(dataset) -> List[int]:
-    dataset_scale_points = []
+    dataset_scale_points: List[int] = []
 
     def process_row(row):
         if len(dataset_scale_points) < row["task_ids"] + 1:

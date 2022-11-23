@@ -48,7 +48,7 @@ class ElementLink:
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         """
         Encodes the given EL-MO encoding of a batch/tensor of label indices.
 
@@ -98,7 +98,7 @@ class ElementLink:
         Returns:
             `torch.FloatTensor`: A PyTorch tensor of label probabilities, of shape (batch_size, num_labels)
         """
-        cls.label_dist_from_preds(F.sigmoid(logits))
+        return cls.label_dist_from_preds(F.sigmoid(logits))
 
     @classmethod
     def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
@@ -117,7 +117,7 @@ class ElementLink:
 
 def cmp_target(op, target, start, num_labels):
     return op(
-        target.unsqueeze(1),
+        target.unsqueeze(-1),
         torch.arange(start, start + num_labels - 1, device=target.device),
     ).float()
 
@@ -133,13 +133,13 @@ class FwdCumulative(ElementLink):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         delta = cmp_target(le, target, 0, num_labels)
         weights = None
         return delta, weights
 
     @classmethod
-    def _label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
+    def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         # P(Y ≤ k) - P(Y ≤ k - 1)
         return F.pad(preds, (0, 1), value=1.0) - F.pad(preds, (1, 0), value=0.0)
 
@@ -155,13 +155,13 @@ class BwdCumulative(ElementLink):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         delta = cmp_target(ge, target, 1, num_labels)
         weights = None
         return delta, weights
 
     @classmethod
-    def _label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
+    def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         # P(Y ≥ k) - P(Y ≥ k + 1)
         return F.pad(preds, (1, 0), value=1.0) - F.pad(preds, (0, 1), value=0.0)
 
@@ -181,11 +181,11 @@ def accumulate_probs(preds: torch.Tensor, reduce_fn, out_fn, type="fwd"):
         iter_range = range(len(slices) - 1, 0, -1)
     else:
         raise ValueError(f"Unknown type {type}, must be 'fwd' or 'bwd'")
-    output = torch.empty_like(slices[0].size() + (len(slices) + 1,))
+    output = torch.empty(*slices[0].size(), len(slices) + 1)
     output_slices = output.unbind(dim=-1)
     output_slices[start_idx] = slices[start_idx]
     # P(Y = k | Y ≥ k) * (1 - P(Y < k))
-    acc = slices[start_idx].copy()
+    acc = slices[start_idx].detach()
     for idx in iter_range:
         acc = reduce_fn(slices[idx], acc)
         output_slices[idx] = out_fn(acc)
@@ -204,13 +204,13 @@ class FwdSratio(ElementLink):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        delta = F.one_hot(target, num_labels)[..., -1]
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
+        delta = F.one_hot(target, num_labels)[..., :-1]
         weights = cmp_target(ge, target, 0, num_labels)
-        return delta, weights
+        return delta.float(), weights
 
     @classmethod
-    def _label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
+    def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
             preds, lambda el, acc: el * (1 - acc), lambda acc: acc, type="fwd"
         )
@@ -227,13 +227,13 @@ class BwdSratio(ElementLink):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         delta = F.one_hot(target, num_labels)[..., 1:]
         weights = cmp_target(le, target, 1, num_labels)
-        return delta, weights
+        return delta.float(), weights
 
     @classmethod
-    def _label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
+    def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
             preds, lambda el, acc: el * (1 - acc), lambda acc: acc, type="bwd"
         )
@@ -250,13 +250,13 @@ class FwdCratio(ElementLink):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         delta = cmp_target(gt, target, 0, num_labels)
         weights = cmp_target(ge, target, 0, num_labels)
         return delta, weights
 
     @classmethod
-    def _label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
+    def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
             preds, lambda el, acc: el * acc, lambda acc: 1 - acc, type="fwd"
         )
@@ -273,13 +273,13 @@ class BwdCratio(ElementLink):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         delta = cmp_target(lt, target, 1, num_labels)
         weights = cmp_target(le, target, 1, num_labels)
         return delta, weights
 
     @classmethod
-    def _label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
+    def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
             preds, lambda el, acc: el * acc, lambda acc: 1 - acc, type="bwd"
         )
@@ -294,6 +294,10 @@ class AcatBase(ElementLink):
     def label_dist_from_logits(cls, logits: torch.Tensor) -> torch.Tensor:
         return F.softmax(cls._class_logits_from_ord_logits(logits), dim=-1)
 
+    @classmethod
+    def _class_logits_from_ord_logits(cls, ord_logits: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError()
+
 
 @register_link
 class FwdAcat(AcatBase):
@@ -306,7 +310,7 @@ class FwdAcat(AcatBase):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         one_hot = F.one_hot(target, num_labels)
         delta = one_hot[..., 1:]
         weights = delta + one_hot[..., :-1]
@@ -337,7 +341,7 @@ class BwdAcat(AcatBase):
     @classmethod
     def link(
         cls, target: torch.Tensor, num_labels: int
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
         one_hot = F.one_hot(target, num_labels)
         delta = one_hot[..., :-1]
         weights = delta + one_hot[..., 1:]

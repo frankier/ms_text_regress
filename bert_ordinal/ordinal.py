@@ -40,7 +40,7 @@ class OrdinalRegressionOutput(ModelOutput):
             heads.
     """
 
-    loss: Optional[torch.FloatTensor] = None
+    loss: Optional[torch.Tensor] = None
     hidden_linear: Optional[torch.FloatTensor] = None
     ordinal_logits: Optional[torch.FloatTensor] = None
     hidden_states: Optional[Tuple[torch.FloatTensor]] = None
@@ -175,10 +175,15 @@ def ordinal_loss(
     input: torch.Tensor, target: torch.Tensor, link, num_labels: int
 ) -> torch.Tensor:
     target_enc, weights = link.link(target, num_labels)
-    return (
-        binary_cross_entropy_with_logits(input, target_enc, weights, reduction="sum")
-        / weights.sum(1)
-    ).sum()
+    if weights is None:
+        bces = binary_cross_entropy_with_logits(
+            input, target_enc, weights, reduction="mean"
+        )
+    else:
+        bces = binary_cross_entropy_with_logits(
+            input, target_enc, weights, reduction="none"
+        ) / weights.sum(1).unsqueeze(1)
+    return bces.sum()
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):

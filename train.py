@@ -97,9 +97,9 @@ def main():
                 f"Warning: multi-scale datasets such as {args.dataset} are not support with torch < 1.13",
                 file=sys.stderr,
             )
-        from bert_ordinal import BertForMultiCutoffOrdinalRegression
+        from bert_ordinal import BertForMultiScaleOrdinalRegression
 
-        bert_mcor = BertForMultiCutoffOrdinalRegression.from_pretrained(
+        bert_mcor = BertForMultiScaleOrdinalRegression.from_pretrained(
             "bert-base-cased", num_labels=num_labels
         )
         link = bert_mcor.link

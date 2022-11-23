@@ -177,7 +177,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         """,
         BERT_START_DOCSTRING,
     )
-    class BertForMultiCutoffOrdinalRegression(BertPreTrainedModel):
+    class BertForMultiScaleOrdinalRegression(BertPreTrainedModel):
         config_class = BertMultiLabelsConfig
 
         def __init__(self, config):

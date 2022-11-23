@@ -7,7 +7,7 @@ import os
 from transformers import TrainingArguments
 
 from bert_ordinal import (
-    BertForMultiCutoffOrdinalRegression,
+    BertForMultiScaleOrdinalRegression,
     BertForOrdinalRegression,
     Trainer,
 )
@@ -71,7 +71,7 @@ def test_bert_for_multi_ordinal_regression(tmp_path):
     )
     num_labels = [5, 10]
 
-    model = BertForMultiCutoffOrdinalRegression.from_pretrained(
+    model = BertForMultiScaleOrdinalRegression.from_pretrained(
         "bert-base-cased", num_labels=num_labels
     )
     trained = mk_toy_trainer(tmp_path, model, dataset).train()

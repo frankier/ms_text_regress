@@ -104,6 +104,7 @@ NORMAL_FEATURES = datasets.Features(
         "grade_type": datasets.Value("string"),
         "orig_num": datasets.Value("float"),
         "orig_denom": datasets.Value("float"),
+        "includes_zero": datasets.Value("bool"),
         "label": datasets.Value("uint8"),
         "scale_points": datasets.Value("uint8"),
         "multiplier": datasets.Value("uint8"),
@@ -115,7 +116,7 @@ NORMAL_FEATURES = datasets.Features(
 class MultiscaleRTCritics(datasets.GeneratorBasedBuilder):
     _DESCRIPTION
 
-    VERSION = datasets.Version("1.0.0")
+    VERSION = datasets.Version("1.0.1")
 
     def _info(self):
         return datasets.DatasetInfo(

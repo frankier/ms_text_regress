@@ -330,7 +330,7 @@ def rcumsum(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     See https://github.com/pytorch/pytorch/issues/33520
     """
     csum = torch.cumsum(x, dim=dim)
-    return x - csum + torch.select(csum, dim, -1)
+    return x - csum + torch.select(csum, dim, -1).unsqueeze(-1)
 
 
 @register_link
@@ -353,14 +353,6 @@ class BwdAcat(AcatBase):
     @classmethod
     def _class_logits_from_ord_logits(cls, ord_logits: torch.Tensor) -> torch.Tensor:
         return rcumsum(F.pad(ord_logits, (0, 1), value=0.0))
-
-    @classmethod
-    def top_from_logits(cls, logits: torch.Tensor) -> torch.Tensor:
-        return cls._class_logits_from_ord_logits(logits).argmax(dim=-1)
-
-    @classmethod
-    def label_dist_from_logits(cls, logits: torch.Tensor) -> torch.Tensor:
-        return F.softmax(cls._class_logits_from_ord_logits(logits), dim=-1)
 
 
 DEFAULT_LINK_NAME = "fwd_acat"

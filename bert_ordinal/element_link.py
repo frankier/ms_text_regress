@@ -170,26 +170,29 @@ def accumulate_probs(preds: torch.Tensor, reduce_fn, out_fn, type="fwd"):
     """
     Accumulates probabilities in the forward or backward direction.
     """
-    slices = preds.unbind(dim=-1)
+    preds_shape = preds.size()
+    preds_batch = preds_shape[:-1]
+    num_cutoffs = preds_shape[-1]
     if type == "fwd":
         start_idx = 0
-        end_idx = len(slices)
-        iter_range = range(1, len(slices))
+        end_idx = num_cutoffs
+        iter_range = range(1, num_cutoffs)
     elif type == "bwd":
-        start_idx = len(slices)
+        start_idx = -1
         end_idx = 0
-        iter_range = range(len(slices) - 1, 0, -1)
+        iter_range = range(-2, -num_cutoffs - 1, -1)
     else:
         raise ValueError(f"Unknown type {type}, must be 'fwd' or 'bwd'")
-    output = torch.empty(*slices[0].size(), len(slices) + 1)
-    output_slices = output.unbind(dim=-1)
-    output_slices[start_idx] = slices[start_idx]
+    output = torch.empty(*preds_batch, num_cutoffs + 1)
+    output[..., start_idx] = out_fn(preds[..., start_idx], 1.0)
     # P(Y = k | Y ≥ k) * (1 - P(Y < k))
-    acc = slices[start_idx].detach()
+    el = preds[..., start_idx].detach()
+    acc = reduce_fn(el, 1.0)
     for idx in iter_range:
-        acc = reduce_fn(slices[idx], acc)
-        output_slices[idx] = out_fn(acc)
-    output_slices[end_idx] = 1 - acc
+        el = preds[..., idx]
+        output[..., idx] = out_fn(el, acc)
+        acc = reduce_fn(el, acc)
+    output[..., end_idx] = acc
     return output
 
 
@@ -212,7 +215,7 @@ class FwdSratio(ElementLink):
     @classmethod
     def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
-            preds, lambda el, acc: el * (1 - acc), lambda acc: acc, type="fwd"
+            preds, lambda el, acc: acc * (1 - el), lambda el, acc: el * acc, type="fwd"
         )
 
 
@@ -235,7 +238,7 @@ class BwdSratio(ElementLink):
     @classmethod
     def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
-            preds, lambda el, acc: el * (1 - acc), lambda acc: acc, type="bwd"
+            preds, lambda el, acc: acc * (1 - el), lambda el, acc: el * acc, type="bwd"
         )
 
 
@@ -258,7 +261,7 @@ class FwdCratio(ElementLink):
     @classmethod
     def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
-            preds, lambda el, acc: el * acc, lambda acc: 1 - acc, type="fwd"
+            preds, lambda el, acc: el * acc, lambda el, acc: (1 - el) * acc, type="fwd"
         )
 
 
@@ -281,7 +284,7 @@ class BwdCratio(ElementLink):
     @classmethod
     def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         return accumulate_probs(
-            preds, lambda el, acc: el * acc, lambda acc: 1 - acc, type="bwd"
+            preds, lambda el, acc: el * acc, lambda el, acc: (1 - el) * acc, type="bwd"
         )
 
 

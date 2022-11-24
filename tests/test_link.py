@@ -9,15 +9,33 @@ NUM_LABELS = 5
 LABELS_ONE_HOT = F.one_hot(LABELS, num_classes=NUM_LABELS).float()
 
 
-def assert_roundtrip(link, enc, test_preds=True):
-    print(LABELS_ONE_HOT)
-    if test_preds:
-        print(link.label_dist_from_preds(enc))
-        assert link.label_dist_from_preds(enc) == approx(LABELS_ONE_HOT)
-        assert link.top_from_preds(enc) == approx(LABELS)
-    print("enc")
-    print(enc)
+def assert_roundtrip(link, enc):
+    assert link.label_dist_from_preds(enc) == approx(LABELS_ONE_HOT)
+    assert link.top_from_preds(enc) == approx(LABELS)
     assert all(link.top_from_logits(enc.logit(eps=1e-6)) == LABELS)
+
+
+def assert_roundtrip_sim_logits(link, enc, weights):
+    # Simulate some linear logits
+    # Step 1: Make initial logits
+    logits = enc.logit(eps=1e-6)
+    # Step 2: Copy all 0 weighted logits from left/right neighbors
+    for logits_vec, weights_vec in zip(logits.unbind(), weights.unbind()):
+        left_val = None
+        to_mask = []
+        for i, (l, w) in enumerate(zip(logits_vec, weights_vec)):
+            if w == 0.0:
+                if left_val is not None:
+                    logits_vec[i] = left_val
+                else:
+                    to_mask.append(i)
+            else:
+                if to_mask is not None:
+                    for j in to_mask:
+                        logits_vec[j] = l
+                    to_mask = None
+                left_val = l
+    assert all(link.top_from_logits(logits) == LABELS)
 
 
 def test_fwd_cumulative():
@@ -193,7 +211,7 @@ def test_fwd_acat():
             ]
         )
     )
-    assert_roundtrip(fwd_acat, enc, test_preds=False)
+    assert_roundtrip_sim_logits(fwd_acat, enc, weight)
 
 
 def test_bwd_acat():
@@ -221,4 +239,4 @@ def test_bwd_acat():
             ]
         )
     )
-    assert_roundtrip(bwd_acat, enc, test_preds=False)
+    assert_roundtrip_sim_logits(bwd_acat, enc, weight)

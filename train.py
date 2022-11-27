@@ -72,6 +72,11 @@ def main():
     dataset, num_labels, is_multi = load_data(
         args.dataset, num_dataset_proc=args.num_dataset_proc
     )
+    if args.num_samples is not None:
+        for label in ("train", "test"):
+            dataset[label] = (
+                dataset[label].shuffle(seed=42).select(range(args.num_samples))
+            )
     dataset = dataset.map(
         tokenize,
         input_columns="text",
@@ -79,11 +84,6 @@ def main():
         desc="Tokenizing",
         num_proc=args.num_dataset_proc,
     )
-    if args.num_samples is not None:
-        for label in ("train", "test"):
-            dataset[label] = (
-                dataset[label].shuffle(seed=42).select(range(args.num_samples))
-            )
     if args.warm_dataset_cache:
         print("Dataset cache warmed")
         return

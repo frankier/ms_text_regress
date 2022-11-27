@@ -114,6 +114,25 @@ class ElementLink:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def summarize_logits(cls, logits: torch.Tensor) -> torch.Tensor:
+        out = []
+        probs = logits.sigmoid()
+        for idx, (logit, prob) in enumerate(zip(logits, probs)):
+            out.append(
+                {
+                    "index": idx,
+                    "subprob": cls.repr_subproblem(idx),
+                    "logit": logit.item(),
+                    "score": prob.item(),
+                }
+            )
+        return out
+
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        raise NotImplementedError()
+
 
 def cmp_target(op, target, start, num_labels):
     return op(
@@ -143,6 +162,10 @@ class FwdCumulative(ElementLink):
         # P(Y ≤ k) - P(Y ≤ k - 1)
         return F.pad(preds, (0, 1), value=1.0) - F.pad(preds, (1, 0), value=0.0)
 
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y ≤ {idx})"
+
 
 @register_link
 class BwdCumulative(ElementLink):
@@ -164,6 +187,10 @@ class BwdCumulative(ElementLink):
     def label_dist_from_preds(cls, preds: torch.Tensor) -> torch.Tensor:
         # P(Y ≥ k) - P(Y ≥ k + 1)
         return F.pad(preds, (1, 0), value=1.0) - F.pad(preds, (0, 1), value=0.0)
+
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y ≥ {idx + 1})"
 
 
 def accumulate_probs(preds: torch.Tensor, reduce_fn, out_fn, type="fwd"):
@@ -218,6 +245,10 @@ class FwdSratio(ElementLink):
             preds, lambda el, acc: acc * (1 - el), lambda el, acc: el * acc, type="fwd"
         )
 
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y = {idx} | Y ≥ {idx})"
+
 
 @register_link
 class BwdSratio(ElementLink):
@@ -240,6 +271,10 @@ class BwdSratio(ElementLink):
         return accumulate_probs(
             preds, lambda el, acc: acc * (1 - el), lambda el, acc: el * acc, type="bwd"
         )
+
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y = {idx + 1} | Y ≤ {idx + 1})"
 
 
 @register_link
@@ -264,6 +299,10 @@ class FwdCratio(ElementLink):
             preds, lambda el, acc: el * acc, lambda el, acc: (1 - el) * acc, type="fwd"
         )
 
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y > {idx} | Y ≥ {idx})"
+
 
 @register_link
 class BwdCratio(ElementLink):
@@ -286,6 +325,10 @@ class BwdCratio(ElementLink):
         return accumulate_probs(
             preds, lambda el, acc: el * acc, lambda el, acc: (1 - el) * acc, type="bwd"
         )
+
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y < {idx + 1} | Y ≤ {idx + 1})"
 
 
 class AcatBase(ElementLink):
@@ -323,6 +366,10 @@ class FwdAcat(AcatBase):
     def _class_logits_from_ord_logits(cls, ord_logits: torch.Tensor) -> torch.Tensor:
         return torch.cumsum(F.pad(ord_logits, (1, 0), value=0.0), dim=-1)
 
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y = {idx + 1} | {idx} ≤ Y ≤ {idx + 1})"
+
 
 def rcumsum(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
     """
@@ -353,6 +400,10 @@ class BwdAcat(AcatBase):
     @classmethod
     def _class_logits_from_ord_logits(cls, ord_logits: torch.Tensor) -> torch.Tensor:
         return rcumsum(F.pad(ord_logits, (0, 1), value=0.0))
+
+    @classmethod
+    def repr_subproblem(cls, idx) -> str:
+        return f"P(Y = {idx} | {idx} ≤ Y ≤ {idx + 1})"
 
 
 DEFAULT_LINK_NAME = "fwd_acat"

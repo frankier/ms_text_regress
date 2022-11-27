@@ -3,6 +3,9 @@ This module contains functionality to load and preprocess open data ordinal
 regression datasets.
 """
 
+import pickle
+import sys
+from os.path import join as pjoin
 from typing import List, Optional, Tuple, Union
 
 import pandas
@@ -266,3 +269,16 @@ def load_data(
     else:
         raise RuntimeError("Unknown dataset")
     return dataset, num_labels, is_multi
+
+
+def save_to_disk_with_labels(path, dataset, num_labels):
+    dataset.save_to_disk(path)
+    with open(pjoin(sys.argv[1], "num_labels.pkl")) as f:
+        pickle.dump(num_labels, f, "wb")
+
+
+def load_from_disk_with_labels(path):
+    dataset = datasets.DatasetDict.load_from_disk(path, keep_in_memory=False)
+    with open(pjoin(path, "num_labels.pkl"), "rb") as f:
+        num_labels = pickle.load(f)
+    return dataset, num_labels

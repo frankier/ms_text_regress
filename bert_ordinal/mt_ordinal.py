@@ -196,3 +196,10 @@ class MultiElementWiseAffine(nn.Module):
         else:
             discriminations = self.discrimination
         return discriminations, torch.nested.nested_tensor(self.offsets)
+
+    def task_summary(self, task_id):
+        if isinstance(self.discrimination, torch.nn.ParameterList):
+            discriminations = self.discrimination[task_id]
+        else:
+            discriminations = self.discrimination
+        return discriminations, self.offsets[task_id]

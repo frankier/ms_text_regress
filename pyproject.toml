@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{include = "bert_ordinal"}]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.8,!=3.9.7"
 transformers = "^4.22.2"
 
 numba = { version = "^0.56.3", optional = true}
@@ -18,11 +18,14 @@ kaggle = { version = "^1.5.12", optional = true }
 evaluate = { version = "^0.2.2", optional = true }
 scikit-learn = { version = "^1.1.2", optional = true }
 tensorboardX = { version = "^2.5.1", optional = true }
+streamlit = {version = "^1.15.1", optional = true}
+streamlit-aggrid = {version = "^0.3.3", optional = true}
 
 [tool.poetry.extras]
 demos = ["datasets", "kaggle", "evaluate", "tensorboardX", "numba", "scikit-learn"]
 datasets = ["datasets", "kaggle"]
 eval = ["numba"]
+viewer = ["streamlit", "streamlit-aggrid"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.1.3"

@@ -57,7 +57,7 @@ def aggrid_interactive_table(df: pandas.DataFrame):
             df,
             gridOptions=options.build(),
             theme="streamlit",
-            update_mode=GridUpdateMode.MODEL_CHANGED,
+            update_mode=GridUpdateMode.SELECTION_CHANGED,
             columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
         )
 
@@ -100,11 +100,11 @@ def get_task_infos(model_path):
     return task_outs
 
 
-def get_score_chart(scores):
+def plot_score_dist(scores):
     return alt.Chart(pandas.DataFrame(scores)).mark_bar().encode(x="index", y="score")
 
 
-def get_el_mo_chart(el_mo_summary):
+def plot_el_mo_dist(el_mo_summary):
     return (
         alt.Chart(pandas.DataFrame(el_mo_summary))
         .mark_bar()
@@ -120,16 +120,37 @@ def get_el_mo_chart(el_mo_summary):
     )
 
 
+def plot_hidden_dist(task_info, hidden):
+    lines = (
+        alt.Chart(task_info)
+        .mark_line()
+        .encode(
+            x="x",
+            y="score",
+            tooltip="subprob",
+            color=alt.Color(
+                "subprob", sort=alt.EncodingSortField("index", order="ascending")
+            ),
+        )
+    )
+    hidden_mark = (
+        alt.Chart(alt.Data(values=[{"hidden": hidden}]))
+        .mark_rule(color="black")
+        .encode(x="hidden:Q")
+    )
+    return lines + hidden_mark
+
+
 def main():
     args = parse_args()
     records, df = load_data(args.path)
     task_infos = get_task_infos(args.model)
     selection = aggrid_interactive_table(df)
-    if selection.selected_rows:
+    if selection.selected_rows and len(selection.selected_rows) == 1:
         selected_id = selection.selected_rows[0]["_selectedRowNodeInfo"]["nodeId"]
         selected_record = records[int(selected_id)]
-        score_chart = get_score_chart(selected_record["scores"])
-        el_mo_chart = get_el_mo_chart(selected_record["el_mo_summary"])
+        score_chart = plot_score_dist(selected_record["scores"])
+        el_mo_chart = plot_el_mo_dist(selected_record["el_mo_summary"])
         task_info = task_infos[selected_record["task_ids"]]
         st.json(
             {
@@ -141,25 +162,14 @@ def main():
         col1, col2 = st.columns(2)
         col1.altair_chart(score_chart.interactive(), use_container_width=True)
         col2.altair_chart(el_mo_chart.interactive(), use_container_width=True)
-        lines = (
-            alt.Chart(task_info)
-            .mark_line()
-            .encode(
-                x="x",
-                y="score",
-                tooltip="subprob",
-                color=alt.Color(
-                    "subprob", sort=alt.EncodingSortField("index", order="ascending")
-                ),
-            )
+        st.altair_chart(
+            plot_hidden_dist(task_info, selected_record["hidden"]).interactive(),
+            use_container_width=True,
         )
-        rule = (
-            alt.Chart(alt.Data(values=[{"hidden": selected_record["hidden"]}]))
-            .mark_rule(color="black")
-            .encode(x="hidden:Q")
+    else:
+        st.header(
+            "Select 1 row to analyse a single prediction, and >1 rows to compare predictions"
         )
-        st.altair_chart(rule)
-        st.altair_chart((lines + rule).interactive(), use_container_width=True)
 
 
 if __name__ == "__main__":

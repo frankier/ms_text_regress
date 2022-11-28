@@ -115,7 +115,7 @@ class ElementLink:
         raise NotImplementedError()
 
     @classmethod
-    def summarize_logits(cls, logits: torch.Tensor) -> torch.Tensor:
+    def summarize_logits(cls, logits: torch.Tensor) -> List[Dict[str, Any]]:
         out = []
         probs = logits.sigmoid()
         for idx, (logit, prob) in enumerate(zip(logits, probs)):

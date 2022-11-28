@@ -79,23 +79,18 @@ class OrdinalRegressionPipeline(Pipeline):
     def postprocess(self, model_outputs):
         link = self.model.link
 
-        # print()
-        # print(model_outputs)
         hidden = model_outputs["hidden_linear"].item()
         ordinal_logits = model_outputs["ordinal_logits"][0]
         label_dist = link.label_dist_from_logits(ordinal_logits)
-        print(label_dist)
-
-        # scores = score_labels_ragged_pt(model_outputs["ordinal_logits"])
-
         dict_scores = sorted(
             [{"index": i, "score": score.item()} for i, score in enumerate(label_dist)],
             key=itemgetter("score"),
             reverse=True,
         )
+
         return {
             "hidden": hidden,
             "el_mo_summary": link.summarize_logits(ordinal_logits),
             "scores": dict_scores,
-            **summarize_label_dist(label_dist),
+            **{k: v.item() for k, v in summarize_label_dist(label_dist).items()},
         }

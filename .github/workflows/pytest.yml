@@ -36,14 +36,14 @@ jobs:
       - name: Install dependencies
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: |
-          pip install -r requirements.txt &&
-          pip install --extra-index-url https://download.pytorch.org/whl/nightly/cpu --pre torch &&
-          pip install --no-deps -e .
+          pip install --user -r requirements.txt &&
+          pip install --user --extra-index-url https://download.pytorch.org/whl/nightly/cpu --pre torch &&
+          pip install --user --no-deps -e .
 
       - name: Run test suite
         run: |
-          pytest tests
+          ~/.local/bin/pytest tests
 
       - name: Run mypy
         run: |
-          mypy
+          ~/.local/bin/mypy

@@ -16,7 +16,7 @@ st.set_page_config(
 LOGIT_99 = torch.logit(torch.tensor(0.99))
 
 
-@st.cache
+@st.experimental_singleton()
 def load_data(path):
     with open(path) as f:
         records = [json.loads(line) for line in f]
@@ -64,7 +64,7 @@ def aggrid_interactive_table(df: pandas.DataFrame):
     return selection
 
 
-@st.cache
+@st.experimental_singleton()
 def get_task_infos(model_path):
     with torch.inference_mode():
         print("Loading model")

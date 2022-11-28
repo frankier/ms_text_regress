@@ -11,15 +11,6 @@ class TextClassificationPipeline(Pipeline):
     pass
 
 
-def median_from_label_dist(label_dist):
-    print("label_dist", label_dist)
-    return (label_dist.cumsum(-1) > 0.5).nonzero()[0]
-
-
-def mean_from_label_dist(label_dist):
-    return sum(label_dist * torch.arange(len(label_dist)))
-
-
 @add_end_docstrings(
     PIPELINE_INIT_ARGS,
     r"""""",
@@ -105,9 +96,7 @@ class OrdinalRegressionPipeline(Pipeline):
         )
         return {
             "hidden": hidden,
-            "median": median_from_label_dist(label_dist).item(),
-            "mode": top,
-            "mean": mean_from_label_dist(label_dist).item(),
             "el_mo_summary": link.summarize_logits(ordinal_logits),
             "scores": dict_scores,
+            **summarize_label_dist(label_dist),
         }

@@ -2,6 +2,7 @@
 This module implements evaluation metrics for ordinal regression tasks including
 those with multiple scales.
 """
+from functools import cache
 
 try:
     import numba
@@ -131,3 +132,37 @@ def qwk_multi_norm(a1, a2, num_labels, label_dist_lcm=None):
     if label_dist_lcm is None:
         label_dist_lcm = calc_label_dist_lcm(num_labels)
     return _jit_qwk_multi_norm(a1, a2, num_labels, label_dist_lcm)
+
+
+@cache
+def evaluate_metrics():
+    import evaluate
+
+    metric_accuracy = evaluate.load("accuracy")
+    metric_mae = evaluate.load("mae")
+    metric_mse = evaluate.load("mse")
+    return (metric_accuracy, metric_mae, metric_mse)
+
+
+def evaluate_predictions(predictions, labels, num_labels):
+    metric_accuracy, metric_mae, metric_mse = evaluate_metrics()
+    mse = metric_mse.compute(predictions=predictions, references=labels)
+    return {
+        **metric_accuracy.compute(predictions=predictions, references=labels),
+        **metric_mae.compute(predictions=predictions, references=labels),
+        **mse,
+        "rmse": (mse["mse"]) ** 0.5,
+        "qwk": qwk_multi_norm(predictions, labels, num_labels),
+    }
+
+
+def evaluate_pred_dist_avgs(pred_dist_avgs, labels, num_labels):
+    from .label_dist import PRED_AVGS
+
+    res = {}
+    for avg in PRED_AVGS:
+        for k, v in evaluate_predictions(
+            pred_dist_avgs[avg], labels, num_labels
+        ).items():
+            res[f"{avg}_{k}"] = v
+    return res

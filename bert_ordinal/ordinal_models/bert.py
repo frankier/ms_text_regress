@@ -4,7 +4,7 @@ heads based upon and in the style of the HuggingFace Transformers library, in
 particular the BertForSequenceClassification class.
 """
 
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import packaging.version
 import torch

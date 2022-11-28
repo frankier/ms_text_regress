@@ -21,9 +21,8 @@ Journal of Statistical Software, 99(6).
 The main differences are that we use 0-based indexing and that we use
 num_labels = K + 1.
 """
-from dataclasses import dataclass
 from operator import ge, gt, le, lt
-from typing import Callable, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import torch
 import torch.nn.functional as F

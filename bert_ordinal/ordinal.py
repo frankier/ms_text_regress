@@ -12,6 +12,7 @@ import packaging.version
 import torch
 import torch.utils.checkpoint
 from torch import nn
+from torch.nn.functional import binary_cross_entropy_with_logits
 from transformers.utils import ModelOutput
 
 
@@ -187,4 +188,4 @@ def ordinal_loss(
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
-    from .mt_ordinal import *
+    from .mt_ordinal import *  # noqa: F403 F401

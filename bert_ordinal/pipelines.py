@@ -4,7 +4,7 @@ import torch
 from transformers.pipelines.base import PIPELINE_INIT_ARGS, Pipeline
 from transformers.utils import add_end_docstrings
 
-from bert_ordinal.ordinal import score_labels_ragged_pt
+from bert_ordinal.label_dist import summarize_label_dist
 
 
 class TextClassificationPipeline(Pipeline):
@@ -83,7 +83,6 @@ class OrdinalRegressionPipeline(Pipeline):
         # print(model_outputs)
         hidden = model_outputs["hidden_linear"].item()
         ordinal_logits = model_outputs["ordinal_logits"][0]
-        top = link.top_from_logits(ordinal_logits).item()
         label_dist = link.label_dist_from_logits(ordinal_logits)
         print(label_dist)
 

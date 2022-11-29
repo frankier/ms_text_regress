@@ -199,14 +199,6 @@ class MultiElementWiseAffine(nn.Module):
             )
         else:
             discrimination = self.discrimination
-        print(self.discrimination)
-        print(self.discrimination.dim())
-        print(
-            "discrimination * (repeated_hiddens + offsets)",
-            discrimination,
-            repeated_hiddens,
-            offsets,
-        )
         return discrimination * (repeated_hiddens + offsets)
 
     def summary(self):

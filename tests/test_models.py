@@ -3,6 +3,7 @@ This module tests the models, but note that they are really more like smoke
 tests, just to test that training and evaluation can run on a single example.
 """
 import os
+from itertools import repeat
 
 import pytest
 from transformers import TrainingArguments
@@ -15,6 +16,8 @@ from bert_ordinal import (
 from bert_ordinal.baseline_models.classification import (
     BertForMultiScaleSequenceClassification,
 )
+from bert_ordinal.element_link import DEFAULT_LINK_NAME
+from bert_ordinal.ordinal_models.bert import DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE
 from datasets import load_dataset
 
 FIXTURE_DIR = os.path.join(
@@ -70,6 +73,13 @@ LINKS = [
     "bwd_acat",
 ]
 
+MULTI_LABEL_DISCRIMINATION_MODES = [
+    "none",
+    "single",
+    "per_task",
+    "multi",
+]
+
 
 @pytest.mark.parametrize("link", LINKS)
 def test_bert_for_ordinal_regression(tmp_path, link):
@@ -99,8 +109,16 @@ def multiscale_dataset():
     return dataset, num_labels
 
 
-@pytest.mark.parametrize("link", LINKS)
-def test_bert_for_multi_ordinal_regression(tmp_path, link, multiscale_dataset):
+@pytest.mark.parametrize(
+    "link,discrimination_mode",
+    {
+        *zip(LINKS, repeat(DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE)),
+        *zip(repeat(DEFAULT_LINK_NAME), MULTI_LABEL_DISCRIMINATION_MODES),
+    },
+)
+def test_bert_for_multi_ordinal_regression(
+    tmp_path, link, discrimination_mode, multiscale_dataset
+):
     dataset, num_labels = multiscale_dataset
     model = BertForMultiScaleOrdinalRegression.from_pretrained(
         BASE, num_labels=num_labels, link=link

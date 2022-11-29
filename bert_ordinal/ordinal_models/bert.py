@@ -25,18 +25,19 @@ from transformers.utils import (
 
 from bert_ordinal.element_link import DEFAULT_LINK_NAME, get_link_by_name
 from bert_ordinal.ordinal import (
-    DEFAULT_DISCRIMINATION_MODE,
     ElementWiseAffine,
     OrdinalRegressionOutput,
     ordinal_loss,
 )
+
+DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE = "per_task"
 
 
 class OrdinalConfigMixin:
     def __init__(
         self,
         link=DEFAULT_LINK_NAME,
-        discrimination_mode=DEFAULT_DISCRIMINATION_MODE,
+        discrimination_mode=DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE,
         **kwargs
     ):
         super().__init__(**kwargs)
@@ -74,7 +75,11 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         )
         self.dropout = nn.Dropout(classifier_dropout)
         self.classifier = nn.Linear(config.hidden_size, 1, bias=False)
-        self.cutoffs = ElementWiseAffine(config.discrimination_mode, config.num_labels)
+        if self.config.discrimination_mode == "per_task":
+            discrimination_mode = "none"
+        else:
+            discrimination_mode = self.config.discrimination_mode
+        self.cutoffs = ElementWiseAffine(discrimination_mode, config.num_labels)
 
         # Initialize weights and apply final processing
         self.post_init()

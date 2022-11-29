@@ -4,15 +4,17 @@ PRED_AVGS = ["median", "mode", "mean"]
 
 
 def median_from_label_dist(label_dist):
-    return (label_dist.cumsum(-1) > 0.5).nonzero()[0]
+    return (label_dist.cumsum(-1) <= 0.5).sum(-1)
 
 
 def mean_from_label_dist(label_dist):
-    return sum(label_dist * torch.arange(len(label_dist)))
+    return (
+        label_dist * torch.arange(label_dist.size(-1), device=label_dist.device)
+    ).sum(-1)
 
 
 def mode_from_label_dist(label_dist):
-    return label_dist.argmax()
+    return label_dist.argmax(-1)
 
 
 def summarize_label_dist(label_dist):

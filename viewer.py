@@ -1,12 +1,15 @@
 import argparse
 import json
+import pickle
 
 import altair as alt
+import numpy
 import pandas
 import streamlit as st
 import torch
+from sklearn.metrics import confusion_matrix
 
-from bert_ordinal import BertForMultiScaleOrdinalRegression
+from bert_ordinal.label_dist import PRED_AVGS
 
 st.set_page_config(
     page_title="Ordinal classification results browser",
@@ -16,7 +19,7 @@ st.set_page_config(
 LOGIT_99 = torch.logit(torch.tensor(0.99))
 
 
-@st.experimental_singleton()
+@st.experimental_memo()
 def load_data(path):
     with open(path) as f:
         records = [json.loads(line) for line in f]
@@ -29,6 +32,9 @@ def load_data(path):
                     "label",
                     "scale_points",
                     "review_score",
+                    "task_ids",
+                    *PRED_AVGS,
+                    "hidden",
                 ]
             }
             for row in records
@@ -39,7 +45,9 @@ def load_data(path):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", help="Input file of an eval dump", required=True)
-    parser.add_argument("--model", help="Input directory of model dump", required=True)
+    parser.add_argument(
+        "--thresholds", help="Input task thresholds pickle", required=True
+    )
     return parser.parse_args()
 
 
@@ -51,7 +59,16 @@ def aggrid_interactive_table(df: pandas.DataFrame):
         df, enableRowGroup=True, enableValue=True, enablePivot=True
     )
     options.configure_side_bar()
-    options.configure_selection("single")
+    options.configure_selection("multiple")
+    options.configure_pagination(enabled=True, paginationPageSize=100)
+    options.configure_column(
+        "movie_title",
+        headerCheckboxSelection=True,
+        headerCheckboxSelectionFilteredOnly=True,
+        checkboxSelection=True,
+        groupSelectsChildren=True,
+        groupSelectsFiltered=True,
+    )
     with st.sidebar:
         selection = AgGrid(
             df,
@@ -64,40 +81,10 @@ def aggrid_interactive_table(df: pandas.DataFrame):
     return selection
 
 
-@st.experimental_singleton()
-def get_task_infos(model_path):
-    with torch.inference_mode():
-        print("Loading model")
-        model = BertForMultiScaleOrdinalRegression.from_pretrained(model_path)
-        print("Loaded")
-        task_outs = []
-        for task_id in range(len(model.num_labels)):
-            discrimination, offsets = model.cutoffs.task_summary(task_id)
-            min_latent = (offsets - LOGIT_99 / discrimination).min()
-            max_latent = (offsets + LOGIT_99 / discrimination).max()
-            xs = torch.linspace(min_latent, max_latent, 100)
-            out = (
-                torch.vstack(
-                    model.cutoffs(
-                        xs.unsqueeze(-1), torch.tensor(task_id).repeat(100)
-                    ).unbind()
-                )
-                .sigmoid()
-                .numpy()
-            )
-            # ordinal_logits = model.cutoffs.discrimination[task_id]
-            task_info_wide = pandas.DataFrame(
-                {"x": xs, **{str(idx): out[:, idx] for idx in range(out.shape[1])}}
-            )
-            task_info_long = task_info_wide.melt(
-                "x", var_name="index", value_name="score"
-            )
-            task_info_long["index"] = pandas.to_numeric(task_info_long["index"])
-            task_info_long["subprob"] = task_info_long["index"].map(
-                model.link.repr_subproblem
-            )
-            task_outs.append(task_info_long)
-    return task_outs
+@st.experimental_memo()
+def get_task_infos(thresholds):
+    with open(thresholds, "rb") as f:
+        return pickle.load(f)
 
 
 def plot_score_dist(scores):
@@ -141,17 +128,54 @@ def plot_hidden_dist(task_info, hidden):
     return lines + hidden_mark
 
 
+def melt_conf_mat(confmat):
+    trues = []
+    preds = []
+    cnts = []
+    for idx, val in numpy.ndenumerate(confmat):
+        trues.append(idx[0])
+        preds.append(idx[1])
+        cnts.append(val)
+    return pandas.DataFrame(
+        {
+            "true": trues,
+            "pred": preds,
+            "cnt": cnts,
+        }
+    )
+
+
+def plot_conf_mat(outputs, targets):
+    confmat = confusion_matrix(targets, outputs)
+    confmat_long = melt_conf_mat(confmat)
+    return (
+        alt.Chart(confmat_long)
+        .mark_rect()
+        .encode(x="true:O", y="pred:O", color="cnt:Q")
+    )
+
+
 def main():
     args = parse_args()
     records, df = load_data(args.path)
-    task_infos = get_task_infos(args.model)
+    if args.thresholds is not None:
+        task_infos = get_task_infos(args.thresholds)
+    else:
+        task_infos = None
     selection = aggrid_interactive_table(df)
+
+    def get_selected_records():
+        for row in selection.selected_rows:
+            yield int(row["_selectedRowNodeInfo"]["nodeId"])
+
     if selection.selected_rows and len(selection.selected_rows) == 1:
-        selected_id = selection.selected_rows[0]["_selectedRowNodeInfo"]["nodeId"]
-        selected_record = records[int(selected_id)]
+        selected_record = records[next(get_selected_records())]
         score_chart = plot_score_dist(selected_record["scores"])
         el_mo_chart = plot_el_mo_dist(selected_record["el_mo_summary"])
-        task_info = task_infos[selected_record["task_ids"]]
+        if task_infos is not None:
+            task_info = task_infos[selected_record["task_ids"]]
+        else:
+            task_info = None
         st.json(
             {
                 k: v
@@ -162,10 +186,20 @@ def main():
         col1, col2 = st.columns(2)
         col1.altair_chart(score_chart.interactive(), use_container_width=True)
         col2.altair_chart(el_mo_chart.interactive(), use_container_width=True)
-        st.altair_chart(
-            plot_hidden_dist(task_info, selected_record["hidden"]).interactive(),
-            use_container_width=True,
-        )
+        if task_info is not None:
+            st.altair_chart(
+                plot_hidden_dist(task_info, selected_record["hidden"]).interactive(),
+                use_container_width=True,
+            )
+    elif selection.selected_rows and len(selection.selected_rows) > 1:
+        selected_df = df.iloc[get_selected_records()]
+        for avg in ["median", "mode"]:
+            st.altair_chart(
+                plot_conf_mat(selected_df[avg], selected_df["label"]).properties(
+                    title=avg.title()
+                )
+            )
+        # XXX: mean, hidden, sum all label dists
     else:
         st.header(
             "Select 1 row to analyse a single prediction, and >1 rows to compare predictions"

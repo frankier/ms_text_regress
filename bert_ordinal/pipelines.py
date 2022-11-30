@@ -7,26 +7,11 @@ from transformers.utils import add_end_docstrings
 from bert_ordinal.label_dist import summarize_label_dist
 
 
-class TextClassificationPipeline(Pipeline):
-    pass
-
-
 @add_end_docstrings(
     PIPELINE_INIT_ARGS,
     r"""""",
 )
-class OrdinalRegressionPipeline(Pipeline):
-    """
-    Text classification pipeline using `BertForOrdinalRegression`.
-    """
-
-    return_all_scores = False
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        # TODO? self.check_model_type
-
+class MultiTaskPipelineBase(Pipeline):
     def _sanitize_parameters(self, **tokenizer_kwargs):
         preprocess_params = tokenizer_kwargs
         postprocess_params = {}
@@ -76,21 +61,55 @@ class OrdinalRegressionPipeline(Pipeline):
         else:
             return self.model(**model_inputs)
 
+
+def output_label_dist(label_dist):
+    dict_scores = sorted(
+        [{"index": i, "score": score.item()} for i, score in enumerate(label_dist)],
+        key=itemgetter("score"),
+        reverse=True,
+    )
+    return {
+        "scores": dict_scores,
+        **{k: v.item() for k, v in summarize_label_dist(label_dist).items()},
+    }
+
+
+class TextClassificationPipeline(MultiTaskPipelineBase):
+    """
+    Text classification pipeline using `BertForMultiScaleSequenceClassification`.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        # TODO? self.check_model_type
+
+    def postprocess(self, model_outputs):
+        logits = model_outputs["logits"][0]
+        label_dist = logits.softmax(-1)
+
+        return output_label_dist(label_dist)
+
+
+class OrdinalRegressionPipeline(MultiTaskPipelineBase):
+    """
+    Text classification pipeline using `BertForOrdinalRegression`.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        # TODO? self.check_model_type
+
     def postprocess(self, model_outputs):
         link = self.model.link
 
         hidden = model_outputs["hidden_linear"].item()
         ordinal_logits = model_outputs["ordinal_logits"][0]
         label_dist = link.label_dist_from_logits(ordinal_logits)
-        dict_scores = sorted(
-            [{"index": i, "score": score.item()} for i, score in enumerate(label_dist)],
-            key=itemgetter("score"),
-            reverse=True,
-        )
 
         return {
             "hidden": hidden,
             "el_mo_summary": link.summarize_logits(ordinal_logits),
-            "scores": dict_scores,
-            **{k: v.item() for k, v in summarize_label_dist(label_dist).items()},
+            **output_label_dist(label_dist),
         }

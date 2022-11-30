@@ -23,3 +23,11 @@ def summarize_label_dist(label_dist):
         "mode": mode_from_label_dist(label_dist),
         "mean": mean_from_label_dist(label_dist),
     }
+
+
+def summarize_label_dists(label_dists):
+    res = {k: [] for k in PRED_AVGS}
+    for label_dist in label_dists:
+        label_dist_sum = summarize_label_dist(label_dist)
+        res = {k: [*res[k], v] for k, v in label_dist_sum.items()}
+    return {k: torch.hstack(v) for k, v in res.items()}

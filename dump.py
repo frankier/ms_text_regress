@@ -99,6 +99,14 @@ def main():
     print("Loading model")
     model = auto_load(args.model)
     print("Loaded")
+    if args.task_thresholds is not None and isinstance(
+        model, BertForMultiScaleSequenceClassification
+    ):
+        print(
+            "Dumping task thresholds only supported for BertForMultiScaleSequenceClassification",
+            file=sys.stderr,
+        )
+        sys.exit(-1)
     if args.results is not None:
         dump_results(model, args.dataset, args.results, args.head)
     if args.task_thresholds is not None:

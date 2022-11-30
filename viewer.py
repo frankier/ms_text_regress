@@ -146,13 +146,32 @@ def melt_conf_mat(confmat):
 
 
 def plot_conf_mat(outputs, targets):
-    confmat = confusion_matrix(targets, outputs)
-    confmat_long = melt_conf_mat(confmat)
-    return (
-        alt.Chart(confmat_long)
-        .mark_rect()
-        .encode(x="true:O", y="pred:O", color="cnt:Q")
+    confmat_data = confusion_matrix(targets, outputs)
+    true_scale = alt.Scale(domain=list(range(len(confmat_data))))
+    pred_scale = alt.Scale(domain=list(range(len(confmat_data))))
+    confmat_long = melt_conf_mat(confmat_data)
+    base_chart = alt.Chart(confmat_long)
+    confmat_chart = base_chart.mark_rect().encode(
+        alt.X("true:O"), alt.Y("pred:O"), color="cnt:Q"
     )
+    top_hist = (
+        base_chart.mark_bar()
+        .encode(
+            alt.X("true:O", title="", scale=true_scale),
+            alt.Y("sum(cnt)", title=""),
+        )
+        .properties(height=60)
+    )
+    right_hist = (
+        base_chart.mark_bar()
+        .encode(
+            alt.Y("pred:O", title="", scale=pred_scale),
+            alt.X("sum(cnt)", title=""),
+        )
+        .properties(width=60)
+    )
+
+    return top_hist & (confmat_chart | right_hist)
 
 
 def main():

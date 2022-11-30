@@ -34,7 +34,7 @@ def load_data(path):
                     "review_score",
                     "task_ids",
                     *PRED_AVGS,
-                    "hidden",
+                    *(["hidden"] if "hidden" in records[0] else []),
                 ]
             }
             for row in records
@@ -45,9 +45,7 @@ def load_data(path):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", help="Input file of an eval dump", required=True)
-    parser.add_argument(
-        "--thresholds", help="Input task thresholds pickle", required=True
-    )
+    parser.add_argument("--thresholds", help="Input task thresholds pickle")
     return parser.parse_args()
 
 
@@ -190,7 +188,10 @@ def main():
     if selection.selected_rows and len(selection.selected_rows) == 1:
         selected_record = records[next(get_selected_records())]
         score_chart = plot_score_dist(selected_record["scores"])
-        el_mo_chart = plot_el_mo_dist(selected_record["el_mo_summary"])
+        if "el_mo_summary" in selected_record:
+            el_mo_chart = plot_el_mo_dist(selected_record["el_mo_summary"])
+        else:
+            el_mo_chart = None
         if task_infos is not None:
             task_info = task_infos[selected_record["task_ids"]]
         else:
@@ -204,7 +205,8 @@ def main():
         )
         col1, col2 = st.columns(2)
         col1.altair_chart(score_chart.interactive(), use_container_width=True)
-        col2.altair_chart(el_mo_chart.interactive(), use_container_width=True)
+        if el_mo_chart is not None:
+            col2.altair_chart(el_mo_chart.interactive(), use_container_width=True)
         if task_info is not None:
             st.altair_chart(
                 plot_hidden_dist(task_info, selected_record["hidden"]).interactive(),

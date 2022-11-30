@@ -181,17 +181,17 @@ class MultiElementWiseAffine(nn.Module):
                 for i in range(len(input))
             ]
         )
-        offsets = torch.nested.nested_tensor(
+        offsets = torch.nested.as_nested_tensor(
             [self.offsets[task_id] for task_id in task_ids]
         )
         if isinstance(self.discrimination, torch.nn.ParameterList):
-            discrimination = torch.nested.nested_tensor(
+            discrimination = torch.nested.as_nested_tensor(
                 [self.discrimination[task_id] for task_id in task_ids]
             )
         elif self.discrimination.dim() == 1:
             # With more nested_tensor ops, this need only be
             # discrimination = self.discrimination[task_ids]
-            discrimination = torch.nested.nested_tensor(
+            discrimination = torch.nested.as_nested_tensor(
                 [
                     self.discrimination[task_id].repeat(len(self.offsets[task_id]))
                     for task_id in task_ids

@@ -141,7 +141,7 @@ class ElementWiseAffine(nn.Module):
     def __init__(self, with_discrimination, num_labels, device=None):
         super().__init__()
         if with_discrimination == "none":
-            self.discrimination = torch.ones(1)
+            self.discrimination = nn.Parameter(torch.ones(1), requires_grad=False)
         elif with_discrimination == "single":
             self.discrimination = nn.Parameter(torch.ones(1))
         elif with_discrimination == "multi":

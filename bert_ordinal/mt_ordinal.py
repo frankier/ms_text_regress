@@ -144,7 +144,7 @@ class MultiElementWiseAffine(nn.Module):
         # Could be a nested_tensor with
         # https://github.com/pytorch/pytorch/issues/87034
         if with_discrimination == "none":
-            self.discrimination = torch.tensor(1.0)
+            self.discrimination = nn.Parameter(torch.tensor(1.0), requires_grad=False)
         elif with_discrimination == "single":
             self.discrimination = nn.Parameter(torch.tensor(1.0))
         elif with_discrimination == "per_task":

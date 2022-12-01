@@ -3,7 +3,6 @@ from fractions import Fraction
 import click
 import numpy
 import pandas
-from sklearn.model_selection import train_test_split
 
 SHORT_LETTER_SCALE = ["F", "E", "D", "C", "B", "A"]
 LONG_LETTER_SCALE = [
@@ -154,7 +153,7 @@ def normalize_reviews(review_df):
 
     # Strip whitespace from grades
     review_df["review_score"] = review_df["review_score"].str.replace(
-        "\s+", "", regex=True
+        r"\s+", "", regex=True
     )
 
     # Copy to get version to do calculations with

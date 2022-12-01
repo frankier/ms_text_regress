@@ -9,7 +9,8 @@ SHORT_LETTER_SCALE = ["F", "E", "D", "C", "B", "A"]
 LONG_LETTER_SCALE = [
     "F-",
     "F",
-    "F+" "E-",
+    "F+",
+    "E-",
     "E",
     "E+",
     "D-",
@@ -92,16 +93,21 @@ def np_round(arr):
     return (arr + 0.5).astype(numpy.int32)
 
 
+def put_onto_scale(df, scale):
+    score_cat = pandas.Categorical(df["review_score"], categories=scale, ordered=True)
+    df["label"] = score_cat.codes
+    df["scale_points"] = len(scale)
+    return df
+
+
 def process_letter_grade_group(group_df):
     group_df["includes_zero"] = False
     group_df["multiplier"] = 1
     group_df["non_neg_error"] = False
     if group_df.iloc[0]["letter_implies_short"]:
-        group_df["label"] = SHORT_LETTER_SCALE.index(group_df.iloc[0]["review_score"])
-        group_df["scale_points"] = len(SHORT_LETTER_SCALE)
+        put_onto_scale(group_df, SHORT_LETTER_SCALE)
     else:
-        group_df["label"] = LONG_LETTER_SCALE.index(group_df.iloc[0]["review_score"])
-        group_df["scale_points"] = len(LONG_LETTER_SCALE)
+        put_onto_scale(group_df, LONG_LETTER_SCALE)
     return group_df
 
 
@@ -264,7 +270,7 @@ def normalize_reviews(review_df):
 @click.argument("inf")
 @click.argument("outf")
 def main(inf, outf):
-    normalize_reviews(pandas.read_csv(inf)).to_parquet(outf)
+    normalize_reviews(pandas.read_csv(inf)).to_parquet(outf, index=False)
 
 
 if __name__ == "__main__":

@@ -257,12 +257,7 @@ def load_data(
                 "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
             }
         )
-        dataset = dataset.rename_columns(
-            {
-                "group_id": "task_ids",
-                "review_content": "text",
-            }
-        )
+        dataset = dataset.rename_columns({"review_content": "text"})
         is_multi = False
     elif name == "multiscale_rt_critics":
         d = datasets.load_dataset("frankier/processed_multiscale_rt_critics")

@@ -236,6 +236,34 @@ def load_data(
         )
         num_labels = get_dataset_scale_points_cdr(dataset)
         is_multi = True
+    elif name == "rt_critics_one":
+        d = datasets.load_dataset("frankier/processed_multiscale_rt_critics")
+        assert isinstance(d, datasets.DatasetDict)
+        d = datasets.concatenate_datasets(list(d.values()))
+        df = pandas.DataFrame(d)
+        biggest_group_size = 0
+        biggest_group_df = None
+        for _key, group_df in df.groupby("group_id"):
+            if len(group_df) > biggest_group_size:
+                biggest_group_size = len(group_df)
+                biggest_group_df = group_df
+        train_df, test_df = train_test_split(
+            biggest_group_df, test_size=0.25, shuffle=True, random_state=42
+        )
+        num_labels = int(train_df.iloc[0]["scale_points"])
+        dataset = datasets.DatasetDict(
+            {
+                "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
+                "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
+            }
+        )
+        dataset = dataset.rename_columns(
+            {
+                "group_id": "task_ids",
+                "review_content": "text",
+            }
+        )
+        is_multi = False
     elif name == "multiscale_rt_critics":
         d = datasets.load_dataset("frankier/processed_multiscale_rt_critics")
         assert isinstance(d, datasets.DatasetDict)

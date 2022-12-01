@@ -267,6 +267,7 @@ def load_data(
     elif name == "multiscale_rt_critics":
         d = datasets.load_dataset("frankier/processed_multiscale_rt_critics")
         assert isinstance(d, datasets.DatasetDict)
+        d = datasets.concatenate_datasets(list(d.values()))
         d = d.map(sample_multiscale_rt_critics, batched=True, batch_size=None)
         """
         df = pandas.DataFrame(d["train"])
@@ -276,7 +277,7 @@ def load_data(
         """
         # df = stratified_split(df, ["grade_type", "group_id"], shuffle=True)
         # train_df, test_df = train_test_split(df, test_size=0.25, stratify=df[['grade_type', 'group_id']].to_records(index=False))
-        df = pandas.DataFrame(d["train"])
+        df = pandas.DataFrame(d)
         train_df, test_df = stratified_split_large(
             df, ["grade_type", "group_id"], 10, small_target="drop"
         )

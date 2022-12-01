@@ -199,14 +199,17 @@ class MultiElementWiseAffine(nn.Module):
             )
         else:
             discrimination = self.discrimination
-        return discrimination * (repeated_hiddens + offsets)
+        return discrimination * repeated_hiddens + offsets
 
     def summary(self):
         if isinstance(self.discrimination, torch.nn.ParameterList):
             discriminations = torch.nested.nested_tensor(self.discrimination)
         else:
             discriminations = self.discrimination
-        return discriminations, torch.nested.nested_tensor(self.offsets)
+        return (
+            discriminations,
+            torch.nested.nested_tensor(self.offsets) / discriminations,
+        )
 
     def task_summary(self, task_id):
         if isinstance(self.discrimination, torch.nn.ParameterList):
@@ -215,4 +218,4 @@ class MultiElementWiseAffine(nn.Module):
             discriminations = self.discrimination[task_id]
         else:
             discriminations = self.discrimination
-        return discriminations, self.offsets[task_id]
+        return discriminations, self.offsets[task_id] / discriminations

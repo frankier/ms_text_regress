@@ -163,10 +163,10 @@ class ElementWiseAffine(nn.Module):
         self.offsets.data.copy_(torch.sort(self.offsets)[0])
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
-        return self.discrimination * (input + self.offsets)
+        return self.discrimination * input + self.offsets
 
     def summary(self):
-        return self.discrimination, self.offsets
+        return self.discrimination, self.offsets / self.discrimination
 
 
 DEFAULT_DISCRIMINATION_MODE = "none"

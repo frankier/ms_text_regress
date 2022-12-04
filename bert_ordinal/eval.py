@@ -144,6 +144,28 @@ def evaluate_metrics():
     return (metric_accuracy, metric_mae, metric_mse)
 
 
+@numba.njit
+def _jit_ms_mae(predictions, references, num_labels):
+    # unique, indices = np.unique(num_labels, return_inverse=True)
+    # true_positives = np.zeros(len(unique), type=np.int32)
+    # totals = np.zeros(len(unique), type=np.int32)
+    acc = 0.0
+    for pred, ref, nl in zip(predictions, references, num_labels):
+        acc += abs((pred - ref)) / (nl - 1)
+    return acc / len(predictions)
+
+
+def ms_mae(predictions, reference, num_labels):
+    if len(predictions) != len(reference) or len(reference) != len(num_labels):
+        raise ValueError(
+            "Lengths of predictions, reference and num_labels passed to ms_mae must be equal"
+        )
+    predictions = np.asarray(predictions, dtype=np.int32)
+    reference = np.asarray(reference, dtype=np.int32)
+    num_labels = np.asarray(num_labels, dtype=np.int32)
+    return _jit_ms_mae(predictions, reference, num_labels)
+
+
 def evaluate_predictions(predictions, labels, num_labels):
     metric_accuracy, metric_mae, metric_mse = evaluate_metrics()
     mse = metric_mse.compute(predictions=predictions, references=labels)
@@ -152,6 +174,7 @@ def evaluate_predictions(predictions, labels, num_labels):
         **metric_mae.compute(predictions=predictions, references=labels),
         **mse,
         "rmse": (mse["mse"]) ** 0.5,
+        "ms_mae": ms_mae(predictions, labels, num_labels),
         "qwk": qwk_multi_norm(predictions, labels, num_labels),
     }
 

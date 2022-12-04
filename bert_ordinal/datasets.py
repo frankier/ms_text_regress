@@ -263,7 +263,7 @@ def load_data(
         d = datasets.load_dataset("frankier/processed_multiscale_rt_critics")
         assert isinstance(d, datasets.DatasetDict)
         d = datasets.concatenate_datasets(list(d.values()))
-        assert isinstance(d, datasets.DatasetDict)
+        assert isinstance(d, datasets.Dataset)
         d = d.map(sample_multiscale_rt_critics, batched=True, batch_size=None)
         """
         df = pandas.DataFrame(d["train"])

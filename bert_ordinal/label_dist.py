@@ -13,6 +13,10 @@ def mean_from_label_dist(label_dist):
     ).sum(-1)
 
 
+def rounded_mean_from_label_dist(label_dist):
+    return (mean_from_label_dist(label_dist) + 0.5).int()
+
+
 def mode_from_label_dist(label_dist):
     return label_dist.argmax(-1)
 
@@ -21,7 +25,7 @@ def summarize_label_dist(label_dist):
     return {
         "median": median_from_label_dist(label_dist),
         "mode": mode_from_label_dist(label_dist),
-        "mean": mean_from_label_dist(label_dist),
+        "mean": rounded_mean_from_label_dist(label_dist),
     }
 
 

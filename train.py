@@ -132,7 +132,7 @@ def main():
         )
 
     if is_multi:
-        label_names = ["labels", "task_ids"]
+        label_names = ["label", "task_ids"]
     else:
         label_names = None
 

@@ -74,7 +74,7 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             else config.hidden_dropout_prob
         )
         self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = nn.Linear(config.hidden_size, 1, bias=False)
+        self.classifier = nn.Linear(config.hidden_size, 1)
         if self.config.discrimination_mode == "per_task":
             discrimination_mode = "none"
         else:
@@ -193,7 +193,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                 else config.hidden_dropout_prob
             )
             self.dropout = nn.Dropout(classifier_dropout)
-            self.classifier = nn.Linear(config.hidden_size, 1, bias=False)
+            self.classifier = nn.Linear(config.hidden_size, 1)
             self.cutoffs = MultiElementWiseAffine(
                 config.discrimination_mode, config.num_labels
             )

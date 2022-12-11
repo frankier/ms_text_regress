@@ -209,8 +209,16 @@ def main():
             col2.altair_chart(el_mo_chart.interactive(), use_container_width=True)
         if task_info is not None:
             st.altair_chart(
-                plot_hidden_dist(task_info, selected_record["hidden"]).interactive(),
+                plot_hidden_dist(
+                    task_info["hidden_to_elmo"], selected_record["hidden"]
+                ).interactive(),
                 use_container_width=True,
+            )
+            st.json(
+                {
+                    "discrimination": task_info["discrimination"],
+                    "offsets": task_info["offsets"],
+                }
             )
     elif selection.selected_rows and len(selection.selected_rows) > 1:
         selected_df = df.iloc[get_selected_records()]

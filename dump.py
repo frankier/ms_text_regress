@@ -10,25 +10,19 @@ from transformers import AutoTokenizer
 from bert_ordinal.baseline_models.classification import (
     BertForMultiScaleSequenceClassification,
 )
-from bert_ordinal.datasets import load_data, load_from_disk_with_labels
-from bert_ordinal.pipelines import OrdinalRegressionPipeline, TextClassificationPipeline
-from bert_ordinal.transformers_utils import auto_load
+from bert_ordinal.baseline_models.regression import BertForMultiScaleSequenceRegression
+from bert_ordinal.datasets import auto_dataset
+from bert_ordinal.transformers_utils import auto_load, auto_pipeline
 
 LOGIT_99 = torch.logit(torch.tensor(0.99))
 
 
 def dump_results(model, dataset, out, head):
-    try:
-        dataset, num_labels = load_data(dataset)
-    except RuntimeError:
-        dataset, num_labels = load_from_disk_with_labels(dataset)
+    dataset, num_labels = auto_dataset(dataset)
     if num_labels != model.config.num_labels:
         print("Warning: num_labels mismatch", file=sys.stderr)
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
-    if isinstance(model, BertForMultiScaleSequenceClassification):
-        pipeline = TextClassificationPipeline(model=model, tokenizer=tokenizer)
-    else:
-        pipeline = OrdinalRegressionPipeline(model=model, tokenizer=tokenizer)
+    pipeline = auto_pipeline(model=model, tokenizer=tokenizer)
     with open(out, "w") as f:
         for idx, row in enumerate(dataset["test"]):
             if head is not None and idx >= head:
@@ -77,7 +71,13 @@ def dump_task_thresholds(model, task_thresholds):
             task_info_long["subprob"] = task_info_long["index"].map(
                 model.link.repr_subproblem
             )
-            task_outs.append(task_info_long)
+            task_outs.append(
+                {
+                    "hidden_to_elmo": task_info_long,
+                    "discrimination": discrimination,
+                    "offsets": offsets,
+                }
+            )
     with open(task_thresholds, "wb") as f:
         pickle.dump(task_outs, f)
 
@@ -99,11 +99,12 @@ def main():
     print("Loading model")
     model = auto_load(args.model)
     print("Loaded")
-    if args.task_thresholds is not None and isinstance(
-        model, BertForMultiScaleSequenceClassification
+    if args.task_thresholds is not None and (
+        isinstance(model, BertForMultiScaleSequenceClassification)
+        or isinstance(model, BertForMultiScaleSequenceRegression)
     ):
         print(
-            "Dumping task thresholds only supported for BertForMultiScaleSequenceClassification",
+            "Dumping task thresholds not supported for BertForMultiScaleSequenceClassification or BertForMultiScaleSequenceRegression",
             file=sys.stderr,
         )
         sys.exit(-1)

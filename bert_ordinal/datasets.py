@@ -379,3 +379,10 @@ def load_from_disk_with_labels(path):
     with open(pjoin(path, "num_labels.pkl"), "rb") as f:
         num_labels = pickle.load(f)
     return dataset, num_labels
+
+
+def auto_dataset(dataset):
+    try:
+        return load_data(dataset)
+    except RuntimeError:
+        return load_from_disk_with_labels(dataset)

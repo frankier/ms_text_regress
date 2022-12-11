@@ -310,8 +310,10 @@ def load_data(
             sub_df = df[
                 (df["critic_name"] == critic_name) & (df["publisher_name"] == publisher)
             ]
-            print("Selected", len(sub_df), "reviews from", critic_name, "at", publisher)
             assert len(sub_df) > 0
+            # Pick the largest grade_type from each critic/publisher combo
+            sub_df = sub_df[sub_df["grade_type"] == sub_df["grade_type"].mode()[0]]
+            print("Selected", len(sub_df), "reviews from", critic_name, "at", publisher)
             selected.append(sub_df)
         df = pandas.concat(selected)
         groups = df.groupby(["critic_name", "group_id"])

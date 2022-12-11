@@ -4,7 +4,6 @@ regression datasets.
 """
 
 import pickle
-import sys
 from os.path import join as pjoin
 from typing import List, Optional, Tuple, Union
 
@@ -369,7 +368,7 @@ def load_data(
 
 def save_to_disk_with_labels(path, dataset, num_labels):
     dataset.save_to_disk(path)
-    with open(pjoin(sys.argv[1], "num_labels.pkl"), "wb") as f:
+    with open(pjoin(path, "num_labels.pkl"), "wb") as f:
         pickle.dump(num_labels, f)
 
 

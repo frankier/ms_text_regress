@@ -19,6 +19,7 @@ from transformers.utils import (
 from bert_ordinal.transformers_utils import (
     BertMultiLabelsConfig,
     LatentRegressionOutput,
+    NormalizeHiddenMixin,
 )
 
 
@@ -28,7 +29,7 @@ from bert_ordinal.transformers_utils import (
     """,
     BERT_START_DOCSTRING,
 )
-class BertForMultiScaleSequenceRegression(BertPreTrainedModel):
+class BertForMultiScaleSequenceRegression(BertPreTrainedModel, NormalizeHiddenMixin):
     config_class = BertMultiLabelsConfig
 
     def __init__(self, config):

@@ -10,6 +10,7 @@ import packaging.version
 import torch
 import torch.utils.checkpoint
 from torch import nn
+from torch.distributions.normal import Normal
 from transformers import Trainer as OriginalHFTrainer
 from transformers.models.bert.modeling_bert import (
     BERT_INPUTS_DOCSTRING,
@@ -158,7 +159,10 @@ class Trainer(NestedTensorTrainerMixin, OriginalHFTrainer):
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
     from bert_ordinal.ordinal import MultiElementWiseAffine, ordinal_loss_multi_labels
-    from bert_ordinal.transformers_utils import BertMultiLabelsMixin
+    from bert_ordinal.transformers_utils import (
+        BertMultiLabelsMixin,
+        NormalizeHiddenMixin,
+    )
 
     class BertOrdinalMultiLabelsConfig(
         OrdinalConfigMixin, BertMultiLabelsMixin, BertConfig
@@ -173,7 +177,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
         """,
         BERT_START_DOCSTRING,
     )
-    class BertForMultiScaleOrdinalRegression(BertPreTrainedModel):
+    class BertForMultiScaleOrdinalRegression(BertPreTrainedModel, NormalizeHiddenMixin):
         config_class = BertOrdinalMultiLabelsConfig
 
         def __init__(self, config):
@@ -274,3 +278,24 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                 hidden_states=outputs.hidden_states,
                 attentions=outputs.attentions,
             )
+
+        def pilot_quantile_init(
+            self, train_dataset, sample_size, batch_size, peak_class_prob=0.8
+        ):
+            self.init_std_hidden_pilot(train_dataset, sample_size, batch_size)
+            ndist = Normal(0, 1)
+            df = train_dataset.to_pandas()
+            groups = df.groupby("task_ids")
+            for task_id, group in groups:
+                print("** task_id", task_id, "**")
+                labels = torch.tensor(group["label"].to_numpy(), dtype=torch.int)
+                scale_points = group["scale_points"].iloc[0]
+                counts = torch.bincount(labels, minlength=scale_points)
+                smoothed_counts = counts.float() + 1.0 / scale_points
+                print(smoothed_counts)
+                freq = smoothed_counts / (len(labels) + 1)
+                cutoffs = ndist.icdf(torch.clip(freq.cumsum(0), 0, 1))[:-1]
+                print(cutoffs)
+                self.cutoffs.set_cutoffs(
+                    task_id, cutoffs, peak_class_prob=peak_class_prob
+                )

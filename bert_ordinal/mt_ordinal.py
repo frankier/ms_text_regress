@@ -5,6 +5,7 @@ import torch.nested
 import torch.utils.checkpoint
 from torch import nn
 from torch.nn.functional import binary_cross_entropy_with_logits
+from torch.special import logit
 
 
 def score_labels_ragged_pt(input: torch.Tensor) -> torch.Tensor:
@@ -114,6 +115,9 @@ def ordinal_decode_multi_labels_pt(input: torch.Tensor) -> torch.Tensor:
     return torch.tensor(
         [torch.count_nonzero(t >= 0.0) for t in input.unbind()], device=input.device
     )
+
+
+MAX_DISCRIM = 50
 
 
 class MultiElementWiseAffine(nn.Module):
@@ -262,3 +266,34 @@ class MultiElementWiseAffine(nn.Module):
         return discriminations, self.transform_offsets(
             self.offsets[task_id], discriminations
         )
+
+    def set_cutoffs(self, task_id, cutoffs, peak_class_prob=0.8):
+        if self.with_discrimination in ("none", "single"):
+            raise RuntimeError(
+                "Cannot set cutoffs when discrimination is not per-task or per-threshold"
+            )
+        if self.with_discrimination == "per_task":
+            raise NotImplementedError(
+                "Cannot set cutoffs when discrimination is per-task"
+            )
+        target_logit = logit(1 - (1 - torch.tensor(peak_class_prob)) / 2)
+        gap_discrims = torch.zeros(len(cutoffs))
+        for gap_idx in range(len(cutoffs) - 1):
+            discrim = target_logit / ((cutoffs[gap_idx + 1] - cutoffs[gap_idx]) / 2)
+            gap_discrims[gap_idx] = torch.clip(
+                discrim, gap_discrims[gap_idx], MAX_DISCRIM
+            )
+            gap_discrims[gap_idx + 1] = torch.clip(
+                discrim, gap_discrims[gap_idx + 1], MAX_DISCRIM
+            )
+        print(f"Setting discrimination for task {task_id} to {gap_discrims}")
+        if self.exp_discrimination:
+            transformed_gap_discrims = torch.log(gap_discrims)
+        else:
+            transformed_gap_discrims = gap_discrims
+        self.discrimination[task_id].data.copy_(transformed_gap_discrims)
+        if self.linear_parameterisation:
+            effective_cutoffs = cutoffs / gap_discrims
+        else:
+            effective_cutoffs = cutoffs
+        self.offsets[task_id].data.copy_(effective_cutoffs)

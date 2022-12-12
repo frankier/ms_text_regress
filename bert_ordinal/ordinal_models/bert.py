@@ -24,11 +24,8 @@ from transformers.utils import (
 )
 
 from bert_ordinal.element_link import DEFAULT_LINK_NAME, get_link_by_name
-from bert_ordinal.ordinal import (
-    ElementWiseAffine,
-    OrdinalRegressionOutput,
-    ordinal_loss,
-)
+from bert_ordinal.ordinal import ElementWiseAffine, ordinal_loss
+from bert_ordinal.transformers_utils import LatentRegressionOutput
 
 DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE = "per_task"
 
@@ -99,7 +96,7 @@ class BertForOrdinalRegression(BertPreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[Tuple[torch.Tensor], OrdinalRegressionOutput]:
+    ) -> Union[Tuple[torch.Tensor], LatentRegressionOutput]:
         """
         labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
             Labels for computing the sequence ordinal regression loss. Indices should be in `[0, ...,
@@ -139,10 +136,10 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             ) + outputs[2:]
             return ((loss,) + output) if loss is not None else output
 
-        return OrdinalRegressionOutput(
+        return LatentRegressionOutput(
             loss=loss,
             hidden_linear=hidden_linear,
-            ordinal_logits=ordinal_logits,
+            logits=ordinal_logits,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
@@ -217,7 +214,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             output_attentions: Optional[bool] = None,
             output_hidden_states: Optional[bool] = None,
             return_dict: Optional[bool] = None,
-        ) -> Union[Tuple[torch.Tensor], OrdinalRegressionOutput]:
+        ) -> Union[Tuple[torch.Tensor], LatentRegressionOutput]:
             """
             task_ids (`torch.LongTensor` of shape `(batch_size,)`):
                 Task ids for each example. Should be in half-open range `(0,
@@ -270,10 +267,10 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                 ) + outputs[2:]
                 return ((loss,) + output) if loss is not None else output
 
-            return OrdinalRegressionOutput(
+            return LatentRegressionOutput(
                 loss=loss,
                 hidden_linear=hidden_linear,
-                ordinal_logits=ordinal_logits,
+                logits=ordinal_logits,
                 hidden_states=outputs.hidden_states,
                 attentions=outputs.attentions,
             )

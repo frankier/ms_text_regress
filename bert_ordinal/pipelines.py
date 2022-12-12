@@ -74,6 +74,28 @@ def output_label_dist(label_dist):
     }
 
 
+class TextRegressionPipeline(MultiTaskPipelineBase):
+    """
+    Text regression pipeline using `BertForMultiScaleSequenceRegression`.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def _forward(self, model_inputs):
+        model_outputs = super()._forward(model_inputs)
+        return model_outputs, self.model.num_labels[model_inputs[1]]
+
+    def postprocess(self, tpl):
+        model_outputs, num_labels = tpl
+        predictions = model_outputs["logits"][0]
+
+        return {
+            "prediction": predictions.item(),
+            "label": torch.clamp(predictions + 0.5, 0.0, num_labels - 1).int().item(),
+        }
+
+
 class TextClassificationPipeline(MultiTaskPipelineBase):
     """
     Text classification pipeline using `BertForMultiScaleSequenceClassification`.
@@ -105,7 +127,7 @@ class OrdinalRegressionPipeline(MultiTaskPipelineBase):
         link = self.model.link
 
         hidden = model_outputs["hidden_linear"].item()
-        ordinal_logits = model_outputs["ordinal_logits"][0]
+        ordinal_logits = model_outputs["logits"][0]
         label_dist = link.label_dist_from_logits(ordinal_logits)
 
         return {

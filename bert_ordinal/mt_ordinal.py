@@ -139,20 +139,31 @@ class MultiElementWiseAffine(nn.Module):
             The device to put the parameters on
     """
 
-    def __init__(self, with_discrimination, num_labels, device=None):
+    def __init__(
+        self,
+        with_discrimination,
+        num_labels,
+        linear_parameterisation=False,
+        exp_discrimination=False,
+        device=None,
+    ):
         super().__init__()
         # Could be a nested_tensor with
         # https://github.com/pytorch/pytorch/issues/87034
+        self.with_discrimination = with_discrimination
+        self.linear_parameterisation = linear_parameterisation
+        self.exp_discrimination = exp_discrimination
+        discrim_init = self.discrimination_init_func()
         if with_discrimination == "none":
-            self.discrimination = nn.Parameter(torch.tensor(1.0), requires_grad=False)
+            self.discrimination = nn.Parameter(discrim_init(()), requires_grad=False)
         elif with_discrimination == "single":
-            self.discrimination = nn.Parameter(torch.tensor(1.0))
+            self.discrimination = nn.Parameter(discrim_init(()))
         elif with_discrimination == "per_task":
-            self.discrimination = nn.Parameter(torch.ones(len(num_labels)))
+            self.discrimination = nn.Parameter(discrim_init(len(num_labels)))
         elif with_discrimination == "multi":
             self.discrimination = torch.nn.ParameterList(
                 [
-                    torch.ones(nl - 1, device=device, dtype=torch.float)
+                    discrim_init(nl - 1, device=device, dtype=torch.float)
                     for nl in num_labels
                 ]
             )
@@ -165,6 +176,12 @@ class MultiElementWiseAffine(nn.Module):
             [torch.empty(nl - 1, device=device, dtype=torch.float) for nl in num_labels]
         )
         self.reset_parameters()
+
+    def discrimination_init_func(self):
+        if self.exp_discrimination:
+            return torch.zeros
+        else:
+            return torch.ones
 
     def reset_parameters(self):
         with torch.no_grad():
@@ -184,31 +201,54 @@ class MultiElementWiseAffine(nn.Module):
         offsets = torch.nested.as_nested_tensor(
             [self.offsets[task_id] for task_id in task_ids]
         )
+        discrimination = self.transform_discrimination(
+            self.task_discriminations(task_ids)
+        )
+        if self.linear_parameterisation:
+            return discrimination * repeated_hiddens + offsets
+        else:
+            return discrimination * (repeated_hiddens + offsets)
+
+    def task_discriminations(self, task_ids):
         if isinstance(self.discrimination, torch.nn.ParameterList):
-            discrimination = torch.nested.as_nested_tensor(
+            return torch.nested.as_nested_tensor(
                 [self.discrimination[task_id] for task_id in task_ids]
             )
         elif self.discrimination.dim() == 1:
             # With more nested_tensor ops, this need only be
             # discrimination = self.discrimination[task_ids]
-            discrimination = torch.nested.as_nested_tensor(
+            return torch.nested.as_nested_tensor(
                 [
                     self.discrimination[task_id].repeat(len(self.offsets[task_id]))
                     for task_id in task_ids
                 ]
             )
         else:
-            discrimination = self.discrimination
-        return discrimination * repeated_hiddens + offsets
+            return self.discrimination
+
+    def transform_discrimination(self, discrimination):
+        if self.exp_discrimination:
+            return torch.exp(discrimination)
+        else:
+            return discrimination
+
+    def transform_offsets(self, offsets, discriminations):
+        if self.linear_parameterisation:
+            return offsets / discriminations
+        else:
+            return offsets
 
     def summary(self):
         if isinstance(self.discrimination, torch.nn.ParameterList):
             discriminations = torch.nested.nested_tensor(self.discrimination)
         else:
             discriminations = self.discrimination
+        discriminations = (self.transform_discrimination(discriminations),)
         return (
             discriminations,
-            torch.nested.nested_tensor(self.offsets) / discriminations,
+            self.transform_offsets(
+                torch.nested.nested_tensor(self.offsets), discriminations
+            ),
         )
 
     def task_summary(self, task_id):
@@ -218,4 +258,7 @@ class MultiElementWiseAffine(nn.Module):
             discriminations = self.discrimination[task_id]
         else:
             discriminations = self.discrimination
-        return discriminations, self.offsets[task_id] / discriminations
+        discriminations = self.transform_discrimination(discriminations)
+        return discriminations, self.transform_offsets(
+            self.offsets[task_id], discriminations
+        )

@@ -22,7 +22,8 @@ def dump_results(model, dataset, out, head):
     if num_labels != model.config.num_labels:
         print("Warning: num_labels mismatch", file=sys.stderr)
     tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
-    pipeline = auto_pipeline(model=model, tokenizer=tokenizer)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    pipeline = auto_pipeline(model=model, tokenizer=tokenizer, device=device)
     with open(out, "w") as f:
         for idx, row in enumerate(dataset["test"]):
             if head is not None and idx >= head:

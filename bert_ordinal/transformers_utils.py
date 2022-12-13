@@ -34,8 +34,8 @@ def pilot_run(model, train_dataset, sample_size, batch_size):
     with torch.inference_mode():
         for chunk in range(0, len(input_ids), batch_size):
             yield model.forward(
-                input_ids=input_ids[chunk : chunk + 32],
-                task_ids=task_ids[chunk : chunk + 32],
+                input_ids=input_ids[chunk : chunk + batch_size],
+                task_ids=task_ids[chunk : chunk + batch_size],
                 labels=None,
             )
 

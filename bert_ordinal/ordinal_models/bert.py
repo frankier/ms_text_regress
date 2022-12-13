@@ -10,7 +10,6 @@ import packaging.version
 import torch
 import torch.utils.checkpoint
 from torch import nn
-from torch.distributions.normal import Normal
 from transformers import Trainer as OriginalHFTrainer
 from transformers.models.bert.modeling_bert import (
     BERT_INPUTS_DOCSTRING,
@@ -25,6 +24,7 @@ from transformers.utils import (
 )
 
 from bert_ordinal.element_link import DEFAULT_LINK_NAME, get_link_by_name
+from bert_ordinal.initialisation import iter_task_normal_cutoffs
 from bert_ordinal.ordinal import ElementWiseAffine, ordinal_loss
 from bert_ordinal.transformers_utils import LatentRegressionOutput
 
@@ -283,18 +283,7 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             self, train_dataset, sample_size, batch_size, peak_class_prob=0.8
         ):
             self.init_std_hidden_pilot(train_dataset, sample_size, batch_size)
-            ndist = Normal(0, 1)
-            df = train_dataset.to_pandas()
-            groups = df.groupby("task_ids")
-            for task_id, group in groups:
-                print("** task_id", task_id, "**")
-                labels = torch.tensor(group["label"].to_numpy(), dtype=torch.int)
-                scale_points = group["scale_points"].iloc[0]
-                counts = torch.bincount(labels, minlength=scale_points)
-                smoothed_counts = counts.float() + 1.0 / scale_points
-                print(smoothed_counts)
-                freq = smoothed_counts / (len(labels) + 1)
-                cutoffs = ndist.icdf(torch.clip(freq.cumsum(0), 0, 1))[:-1]
+            for task_id, cutoffs in iter_task_normal_cutoffs(train_dataset):
                 print(cutoffs)
                 self.cutoffs.set_cutoffs(
                     task_id, cutoffs, peak_class_prob=peak_class_prob

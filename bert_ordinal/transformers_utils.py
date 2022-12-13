@@ -58,8 +58,8 @@ class NormalizeHiddenMixin:
     def init_std_hidden(self, hiddens):
         mean = hiddens.mean()
         std = hiddens.std()
+        self.classifier.bias.data = (self.classifier.bias.data - mean) / std
         self.classifier.weight.data /= std
-        self.classifier.bias.data -= mean / std
 
 
 @dataclass

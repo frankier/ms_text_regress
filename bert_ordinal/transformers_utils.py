@@ -25,19 +25,24 @@ class BertMultiLabelsConfig(BertMultiLabelsMixin, BertConfig):
         super().__init__(**kwargs)
 
 
-def pilot_run(model, train_dataset, sample_size, batch_size):
+def pilot_run(model, train_dataset, sample_size, batch_size, train_mode=False):
     train_dataset = train_dataset.shuffle(seed=42).select(range(sample_size))
     input_ids = torch.tensor(train_dataset["input_ids"], device=model.device)
     task_ids = torch.tensor(
         train_dataset["task_ids"], device=model.device, dtype=torch.long
     ).unsqueeze(-1)
     with torch.inference_mode():
+        if train_mode:
+            orig_training = model.training
+            model.train()
         for chunk in range(0, len(input_ids), batch_size):
             yield model.forward(
                 input_ids=input_ids[chunk : chunk + batch_size],
                 task_ids=task_ids[chunk : chunk + batch_size],
                 labels=None,
             )
+        if train_mode:
+            model.train(orig_training)
 
 
 class NormalizeHiddenMixin:

@@ -88,9 +88,11 @@ class TextRegressionPipeline(MultiTaskPipelineBase):
 
     def postprocess(self, tpl):
         model_outputs, num_labels = tpl
+        hidden = model_outputs["hidden_linear"].item()
         predictions = model_outputs["logits"][0]
 
         return {
+            "hidden": hidden,
             "prediction": predictions.item(),
             "label": torch.clamp(predictions + 0.5, 0.0, num_labels - 1).int().item(),
         }

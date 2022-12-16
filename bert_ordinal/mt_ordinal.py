@@ -287,13 +287,24 @@ class MultiElementWiseAffine(nn.Module):
                 discrim, gap_discrims[gap_idx + 1], MAX_DISCRIM
             )
         print(f"Setting discrimination for task {task_id} to {gap_discrims}")
+        self.set_task_params(task_id, cutoffs, gap_discrims)
+
+    def set_task_params(self, task_id, cutoffs, discrims):
         if self.exp_discrimination:
-            transformed_gap_discrims = torch.log(gap_discrims)
+            transformed_gap_discrims = torch.log(discrims)
         else:
-            transformed_gap_discrims = gap_discrims
+            transformed_gap_discrims = discrims
         self.discrimination[task_id].data.copy_(transformed_gap_discrims)
         if self.linear_parameterisation:
-            effective_cutoffs = cutoffs / gap_discrims
+            effective_cutoffs = cutoffs / discrims
         else:
             effective_cutoffs = cutoffs
         self.offsets[task_id].data.copy_(effective_cutoffs)
+
+    def set_parameters(self, all_params):
+        if self.with_discrimination != "multi":
+            raise RuntimeError("Cannot set parameters when discrimination is not multi")
+        for task_id, task_params in enumerate(all_params):
+            offsets = task_params[0, :]
+            discriminations = task_params[1, :]
+            self.set_task_params(task_id, -offsets, discriminations)

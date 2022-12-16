@@ -288,3 +288,6 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
                 self.cutoffs.set_cutoffs(
                     task_id, cutoffs, peak_class_prob=peak_class_prob
                 )
+
+        def set_ordinal_heads(self, cutoffs):
+            self.cutoffs.set_parameters(cutoffs)

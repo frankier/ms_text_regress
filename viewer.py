@@ -44,7 +44,7 @@ def load_data(path):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--path", help="Input file of an eval dump", required=True)
+    parser.add_argument("--path", help="Input file of an eval dump")
     parser.add_argument("--thresholds", help="Input task thresholds pickle")
     return parser.parse_args()
 
@@ -105,7 +105,7 @@ def plot_el_mo_dist(el_mo_summary):
     )
 
 
-def plot_hidden_dist(task_info, hidden):
+def plot_hidden_dist(task_info, hidden=None):
     lines = (
         alt.Chart(task_info)
         .mark_line()
@@ -118,12 +118,15 @@ def plot_hidden_dist(task_info, hidden):
             ),
         )
     )
-    hidden_mark = (
-        alt.Chart(alt.Data(values=[{"hidden": hidden}]))
-        .mark_rule(color="black")
-        .encode(x="hidden:Q")
-    )
-    return lines + hidden_mark
+    if hidden is not None:
+        hidden_mark = (
+            alt.Chart(alt.Data(values=[{"hidden": hidden}]))
+            .mark_rule(color="black")
+            .encode(x="hidden:Q")
+        )
+        return lines + hidden_mark
+    else:
+        return lines
 
 
 def melt_conf_mat(confmat):
@@ -172,20 +175,40 @@ def plot_conf_mat(outputs, targets):
     return top_hist & (confmat_chart | right_hist)
 
 
+def plot_task(task_info, hidden=None):
+    st.altair_chart(
+        plot_hidden_dist(task_info["hidden_to_elmo"], hidden).interactive(),
+        use_container_width=True,
+    )
+    st.json(
+        {
+            "discrimination": task_info["discrimination"],
+            "offsets": task_info["offsets"],
+        }
+    )
+
+
 def main():
     args = parse_args()
-    records, df = load_data(args.path)
+
+    if args.path:
+        records, df = load_data(args.path)
+        selection = aggrid_interactive_table(df)
+
+        def get_selected_records():
+            for row in selection.selected_rows:
+                yield int(row["_selectedRowNodeInfo"]["nodeId"])
+
+        selected_rows = selection.selected_rows
+    else:
+        selected_rows = None
+
     if args.thresholds is not None:
         task_infos = get_task_infos(args.thresholds)
     else:
         task_infos = None
-    selection = aggrid_interactive_table(df)
 
-    def get_selected_records():
-        for row in selection.selected_rows:
-            yield int(row["_selectedRowNodeInfo"]["nodeId"])
-
-    if selection.selected_rows and len(selection.selected_rows) == 1:
+    if selected_rows and len(selected_rows) == 1:
         selected_record = records[next(get_selected_records())]
         score_chart = plot_score_dist(selected_record["scores"])
         if "el_mo_summary" in selected_record:
@@ -208,19 +231,8 @@ def main():
         if el_mo_chart is not None:
             col2.altair_chart(el_mo_chart.interactive(), use_container_width=True)
         if task_info is not None:
-            st.altair_chart(
-                plot_hidden_dist(
-                    task_info["hidden_to_elmo"], selected_record["hidden"]
-                ).interactive(),
-                use_container_width=True,
-            )
-            st.json(
-                {
-                    "discrimination": task_info["discrimination"],
-                    "offsets": task_info["offsets"],
-                }
-            )
-    elif selection.selected_rows and len(selection.selected_rows) > 1:
+            plot_task(task_info, selected_record["hidden"])
+    elif selected_rows and len(selected_rows) > 1:
         selected_df = df.iloc[get_selected_records()]
         for avg in ["median", "mode"]:
             st.altair_chart(
@@ -230,9 +242,14 @@ def main():
             )
         # XXX: mean, hidden, sum all label dists
     else:
-        st.header(
-            "Select 1 row to analyse a single prediction, and >1 rows to compare predictions"
+        st.text(
+            "Select one row to analyse a single prediction, and more than one rows to compare predictions. "
+            "You can inspect task thresholds below."
         )
+        if task_infos is not None:
+            selected = st.selectbox("Task", range(len(task_infos)))
+
+            plot_task(task_infos[selected])
 
 
 if __name__ == "__main__":

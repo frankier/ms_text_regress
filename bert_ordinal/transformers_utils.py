@@ -132,6 +132,9 @@ def auto_pipeline(model, *args, **kwargs):
         TextRegressionPipeline,
     )
 
+    if "device" not in kwargs and torch.cuda.is_available():
+        kwargs["device"] = 0
+
     if isinstance(model, BertForMultiScaleSequenceClassification):
         return TextClassificationPipeline(model=model, *args, **kwargs)
     elif isinstance(model, BertForMultiScaleSequenceRegression):

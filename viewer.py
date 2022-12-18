@@ -1,6 +1,7 @@
 import argparse
 import json
 import pickle
+from os.path import join as pjoin
 
 import altair as alt
 import numpy
@@ -46,6 +47,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", help="Input file of an eval dump")
     parser.add_argument("--thresholds", help="Input task thresholds pickle")
+    parser.add_argument("--multi", help="Multi-checkpoint dump")
     return parser.parse_args()
 
 
@@ -146,8 +148,8 @@ def melt_conf_mat(confmat):
     )
 
 
-def plot_conf_mat(outputs, targets):
-    confmat_data = confusion_matrix(targets, outputs)
+def plot_conf_mat(outputs, targets, scale_points):
+    confmat_data = confusion_matrix(targets, outputs, labels=range(scale_points))
     true_scale = alt.Scale(domain=list(range(len(confmat_data))))
     pred_scale = alt.Scale(domain=list(range(len(confmat_data))))
     confmat_long = melt_conf_mat(confmat_data)
@@ -188,11 +190,65 @@ def plot_task(task_info, hidden=None):
     )
 
 
-def main():
-    args = parse_args()
+AVGS = ["median", "mode", "mean"]
 
-    if args.path:
-        records, df = load_data(args.path)
+
+def multi_conf_mat(selected_df):
+    from bert_ordinal.eval import evaluate_predictions
+
+    tabs = st.tabs(AVGS)
+    for avg, tab in zip(AVGS, tabs):
+        with tab:
+            st.altair_chart(
+                plot_conf_mat(
+                    selected_df[avg],
+                    selected_df["label"],
+                    selected_df["scale_points"].max(),
+                ).properties(title=avg.title())
+            )
+            if st.button("Calculate metrics", key=avg):
+                predictions = selected_df[avg].to_numpy()
+                targets = selected_df["label"].to_numpy()
+                scale_points = selected_df["scale_points"].to_numpy()
+                st.json(evaluate_predictions(predictions, targets, scale_points))
+
+
+def label_densities(df):
+    show_counts = st.checkbox("Counts", value=True)
+    densities = alt.Chart(df).transform_density(
+        "hidden", groupby=["label"], counts=show_counts, as_=["hidden", "density"]
+    )
+    areas = densities.mark_area(line={"color": "black"}, opacity=0.5).encode(
+        x="hidden:Q",
+        y="density:Q",
+        order="label:N",
+    )
+    labels = (
+        densities.mark_text(fontSize=20, dy=-10)
+        .transform_aggregate(
+            max_density="max(density)",
+            max_density_pt="argmax(density)",
+            groupby=["label"],
+        )
+        .transform_calculate(
+            hidden_at_max_density="datum.max_density_pt.hidden",
+        )
+        .encode(x="hidden_at_max_density:Q", y="max_density:Q", text="label:O")
+    )
+
+    st.altair_chart(areas + labels)
+
+
+def get_review_score_map(df):
+    mapping = {}
+    for idx, grp in df.groupby(["label", "review_score"]):
+        mapping[int(grp.iloc[0]["label"])] = grp.iloc[0]["review_score"]
+    return mapping
+
+
+def plot_paths(dump_path, thresholds_path):
+    if dump_path:
+        records, df = load_data(dump_path)
         selection = aggrid_interactive_table(df)
 
         def get_selected_records():
@@ -203,8 +259,8 @@ def main():
     else:
         selected_rows = None
 
-    if args.thresholds is not None:
-        task_infos = get_task_infos(args.thresholds)
+    if thresholds_path is not None:
+        task_infos = get_task_infos(thresholds_path)
     else:
         task_infos = None
 
@@ -234,13 +290,19 @@ def main():
             plot_task(task_info, selected_record["hidden"])
     elif selected_rows and len(selected_rows) > 1:
         selected_df = df.iloc[get_selected_records()]
-        for avg in ["median", "mode"]:
-            st.altair_chart(
-                plot_conf_mat(selected_df[avg], selected_df["label"]).properties(
-                    title=avg.title()
-                )
-            )
-        # XXX: mean, hidden, sum all label dists
+        group_by_task = st.checkbox("Group by task")
+        if group_by_task:
+            task_id = st.selectbox("Task", selected_df["task_ids"].unique())
+            selected_task_df = selected_df[selected_df["task_ids"] == task_id]
+            st.json(get_review_score_map(selected_task_df), expanded=False)
+            with st.expander("Confusion matrices", expanded=True):
+                multi_conf_mat(selected_task_df)
+            with st.expander("Label densities", expanded=True):
+                label_densities(selected_task_df)
+        else:
+            multi_conf_mat(selected_df)
+            label_densities(selected_df)
+        # TODO: swarm plots
     else:
         st.text(
             "Select one row to analyse a single prediction, and more than one rows to compare predictions. "
@@ -250,6 +312,34 @@ def main():
             selected = st.selectbox("Task", range(len(task_infos)))
 
             plot_task(task_infos[selected])
+
+
+@st.experimental_memo()
+def load_checkpoint_index(path):
+    with open(pjoin(path, "index.json"), "r") as f:
+        index = json.load(f)
+    chkpt_dicts = {
+        ds_split: {chkpt["nick"]: chkpt for chkpt in index[ds_split]}
+        for ds_split in index
+    }
+    return chkpt_dicts
+
+
+def main():
+    args = parse_args()
+    if args.multi:
+        chkpt_dicts = load_checkpoint_index(args.multi)
+        with st.sidebar:
+            ds_split = st.selectbox("Dataset split", list(chkpt_dicts.keys()))
+            chkpt_dict = chkpt_dicts[ds_split]
+            checkpoint = st.select_slider("Checkpoint", list(chkpt_dict.keys()))
+        selected_checkpoint = chkpt_dict[checkpoint]
+        plot_paths(
+            pjoin(args.multi, selected_checkpoint["dump"]),
+            pjoin(args.multi, selected_checkpoint["thresholds"]),
+        )
+    else:
+        plot_paths(args.path, args.thresholds)
 
 
 if __name__ == "__main__":

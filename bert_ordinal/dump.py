@@ -43,8 +43,8 @@ def dump_task_thresholds(model, task_thresholds):
     with torch.inference_mode():
         for task_id in range(len(model.num_labels)):
             discrimination, offsets = model.cutoffs.task_summary(task_id)
-            min_latent = (offsets - LOGIT_99 / discrimination).min()
-            max_latent = (offsets + LOGIT_99 / discrimination).max()
+            min_latent = (offsets - abs(LOGIT_99 / discrimination)).min()
+            max_latent = (offsets + abs(LOGIT_99 / discrimination)).max()
             xs = torch.linspace(min_latent, max_latent, 100)
             out = (
                 torch.vstack(

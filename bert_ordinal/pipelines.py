@@ -125,11 +125,18 @@ class OrdinalRegressionPipeline(MultiTaskPipelineBase):
 
         # TODO? self.check_model_type
 
+    def _forward(self, model_inputs):
+        model_outputs = super()._forward(model_inputs)
+        # Here we get rid of the nested_tensor so that it works with Pytorch
+        # 1.13 which can't copy them between devices
+        model_outputs.logits = model_outputs.logits[0]
+        return model_outputs
+
     def postprocess(self, model_outputs):
         link = self.model.link
 
         hidden = model_outputs["hidden_linear"].item()
-        ordinal_logits = model_outputs["logits"][0]
+        ordinal_logits = model_outputs["logits"]
         label_dist = link.label_dist_from_logits(ordinal_logits)
 
         return {

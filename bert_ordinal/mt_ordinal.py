@@ -238,9 +238,9 @@ class MultiElementWiseAffine(nn.Module):
 
     def transform_offsets(self, offsets, discriminations):
         if self.linear_parameterisation:
-            return offsets / discriminations
+            return -offsets / discriminations
         else:
-            return offsets
+            return -offsets
 
     def summary(self):
         if isinstance(self.discrimination, torch.nn.ParameterList):

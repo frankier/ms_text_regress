@@ -166,7 +166,7 @@ def ms_mae(predictions, reference, num_labels):
     return _jit_ms_mae(predictions, reference, num_labels)
 
 
-def evaluate_predictions(predictions, labels, num_labels):
+def basic_metrics(predictions, labels, num_labels):
     metric_accuracy, metric_mae, metric_mse = evaluate_metrics()
     mse = metric_mse.compute(predictions=predictions, references=labels)
     return {
@@ -175,17 +175,39 @@ def evaluate_predictions(predictions, labels, num_labels):
         **mse,
         "rmse": (mse["mse"]) ** 0.5,
         "ms_mae": ms_mae(predictions, labels, num_labels),
-        "qwk": qwk_multi_norm(predictions, labels, num_labels),
     }
 
 
-def evaluate_pred_dist_avgs(pred_dist_avgs, labels, num_labels):
+def evaluate_predictions(predictions, labels, num_labels, task_ids=None):
+    metrics = basic_metrics(predictions, labels, num_labels)
+    if task_ids is not None:
+        sorted_idx = np.argsort(task_ids)
+        cuts = np.unique(task_ids[sorted_idx], return_index=True)[1][1:]
+        tavg_metrics = {}
+        for pred, lbl, nl in zip(
+            np.split(predictions[sorted_idx], cuts),
+            np.split(labels[sorted_idx], cuts),
+            np.split(num_labels[sorted_idx], cuts),
+        ):
+            for name, metric in basic_metrics(pred, lbl, nl).items():
+                if name not in tavg_metrics:
+                    tavg_metrics[name] = 0.0
+                tavg_metrics[name] += metric
+            if "qwk" not in tavg_metrics:
+                tavg_metrics["qwk"] = 0.0
+            tavg_metrics["qwk"] += qwk(pred, lbl, nl[0])
+        for metric, val in tavg_metrics.items():
+            metrics[f"tavg_{metric}"] = val / (len(cuts) + 1)
+    return metrics
+
+
+def evaluate_pred_dist_avgs(pred_dist_avgs, labels, num_labels, task_ids=None):
     from .label_dist import PRED_AVGS
 
     res = {}
     for avg in PRED_AVGS:
         for k, v in evaluate_predictions(
-            pred_dist_avgs[avg], labels, num_labels
+            pred_dist_avgs[avg], labels, num_labels, task_ids
         ).items():
             res[f"{avg}_{k}"] = v
     return res

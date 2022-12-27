@@ -516,7 +516,7 @@ class CustomSamplerTrainer(Trainer):
         task_ids = self.train_dataset["task_ids"]
 
         if self.sampler == "task_at_a_time":
-            batch_sampler = (TaskAtATimeSampler(task_ids, self._train_batch_size),)
+            batch_sampler = TaskAtATimeSampler(task_ids, self._train_batch_size)
         elif self.sampler == "label_stratified_task_at_a_time":
             labels = self.train_dataset["label"]
             batch_sampler = LabelStratifiedTaskAtATimeSampler(

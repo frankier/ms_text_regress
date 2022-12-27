@@ -25,23 +25,40 @@ class BertMultiLabelsConfig(BertMultiLabelsMixin, BertConfig):
         super().__init__(**kwargs)
 
 
-def pilot_run(model, train_dataset, sample_size, batch_size, train_mode=False):
-    train_dataset = train_dataset.shuffle(seed=42).select(range(sample_size))
+def inference_run(
+    model,
+    train_dataset,
+    batch_size,
+    sample_size=None,
+    train_mode=False,
+    eval_mode=False,
+    yield_indices=False,
+):
+    if sample_size:
+        train_dataset = train_dataset.shuffle(seed=42).select(range(sample_size))
     input_ids = torch.tensor(train_dataset["input_ids"], device=model.device)
     task_ids = torch.tensor(
         train_dataset["task_ids"], device=model.device, dtype=torch.long
     ).unsqueeze(-1)
     with torch.inference_mode():
-        if train_mode:
+        if eval_mode or train_mode:
             orig_training = model.training
-            model.train()
+            if train_mode:
+                model.train()
+            else:
+                model.eval()
         for chunk in range(0, len(input_ids), batch_size):
-            yield model.forward(
-                input_ids=input_ids[chunk : chunk + batch_size],
-                task_ids=task_ids[chunk : chunk + batch_size],
+            idx_slice = slice(chunk, chunk + batch_size)
+            result = model.forward(
+                input_ids=input_ids[idx_slice],
+                task_ids=task_ids[idx_slice],
                 labels=None,
             )
-        if train_mode:
+            if yield_indices:
+                yield result, idx_slice
+            else:
+                yield result
+        if train_mode or eval_mode:
             model.train(orig_training)
 
 
@@ -50,7 +67,7 @@ class NormalizeHiddenMixin:
         hiddens = torch.vstack(
             [
                 out.hidden_linear
-                for out in pilot_run(self, train_dataset, sample_size, batch_size)
+                for out in inference_run(self, train_dataset, batch_size, sample_size)
             ]
         )
         self.init_std_hidden(hiddens)

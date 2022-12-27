@@ -20,6 +20,7 @@ scikit-learn = { version = "^1.1.2", optional = true }
 tensorboardX = { version = "^2.5.1", optional = true }
 streamlit = {version = "^1.15.1", optional = true}
 streamlit-aggrid = {version = "^0.3.3", optional = true}
+rpy2 = "^3.5.6"
 
 [tool.poetry.extras]
 demos = ["datasets", "kaggle", "evaluate", "tensorboardX", "numba", "scikit-learn"]

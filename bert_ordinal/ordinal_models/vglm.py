@@ -112,15 +112,10 @@ def plus_one_smoothing(df, x_var, y_var, num_labels):
     return pd.concat([df, pd.DataFrame({x_var: xs, y_var: ys})])
 
 
-def refit(
-    model, family_name, train_dataset, batch_size, mask_vglm_errors=False, **kwargs
-):
-    from pandas import DataFrame
-    from rpy2.rinterface_lib.embedded import RRuntimeError
-
+def prepare_regressors(model, train_dataset, batch_size):
     from bert_ordinal.transformers_utils import inference_run
 
-    results = {}
+    regressors = {}
     for result_batch, idx_slice in inference_run(
         model, train_dataset, batch_size, eval_mode=True, yield_indices=True
     ):
@@ -131,30 +126,57 @@ def refit(
             result_batch.hidden_linear,
         )
         for task_id, label, scale_points, hidden_linear in batch_info:
-            xs, ys, _ = results.setdefault(task_id, ([], [], scale_points))
+            xs, ys, _ = regressors.setdefault(task_id, ([], [], scale_points))
             xs.append(hidden_linear.item())
             ys.append(label)
-    for task_id, (xs, ys, scale_points) in results.items():
-        df = DataFrame({"xs": xs, "ys": ys})
-        try:
-            coefs = vglm(df, "xs", "ys", family_name, scale_points, **kwargs)
-        except RRuntimeError:
-            if not mask_vglm_errors:
-                raise
-            results[task_id] = None
-        else:
-            results[task_id] = coefs
-    return results
+    return regressors
+
+
+def fit_one_task(item, family_name, mask_vglm_errors=False, **kwargs):
+    from pandas import DataFrame
+    from rpy2.rinterface_lib.embedded import RRuntimeError
+
+    task_id, (xs, ys, scale_points) = item
+    df = DataFrame({"xs": xs, "ys": ys})
+    try:
+        coefs = vglm(df, "xs", "ys", family_name, scale_points, **kwargs)
+    except RRuntimeError:
+        # if not mask_vglm_errors:
+        # raise
+        return task_id, None
+    else:
+        return task_id, coefs
+
+
+def refit(family_name, regressors, num_workers, mask_vglm_errors=False, **kwargs):
+    from functools import partial
+
+    from torch.multiprocessing import Pool
+
+    all_coefs = {}
+
+    fit_one_task_partial = partial(
+        fit_one_task,
+        family_name=family_name,
+        mask_vglm_errors=mask_vglm_errors,
+        **kwargs,
+    )
+    with Pool(num_workers) as p:
+        for task_id, coefs in p.imap_unordered(
+            fit_one_task_partial, regressors.items()
+        ):
+            all_coefs[task_id] = coefs
+
+    return all_coefs
 
 
 def label_dists_from_hiddens(
-    model,
     family_name,
-    train_dataset,
-    batch_size,
+    regressors,
     task_ids,
     test_hiddens,
-    num_labels,
+    batch_num_labels,
+    num_workers=1,
     **kwargs,
 ):
     import torch
@@ -162,11 +184,12 @@ def label_dists_from_hiddens(
     from bert_ordinal.element_link import get_link_by_name
 
     link = get_link_by_name("fwd_" + family_name)
-    coefs = refit(model, family_name, train_dataset, batch_size, mask_vglm_errors=True)
+    coefs = refit(family_name, regressors, num_workers, **kwargs)
     label_dists = []
-    for task_id, test_hidden in zip(task_ids, test_hiddens, strict=True):
-        if coefs[task_id] is None:
-            nl = num_labels[task_id]
+    for task_id, test_hidden, nl in zip(
+        task_ids, test_hiddens, batch_num_labels, strict=True
+    ):
+        if coefs.get(task_id) is None:
             label_dists.append(torch.ones((nl,)) / nl)
         else:
             intercepts = coefs[task_id][0, :]

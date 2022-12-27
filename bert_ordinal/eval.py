@@ -199,7 +199,7 @@ def evaluate_predictions(predictions, labels, num_labels, task_ids=None):
                 tavg_metrics["qwk"] = 0.0
             tavg_metrics["qwk"] += qwk(pred, lbl, nl[0])
         for metric, val in tavg_metrics.items():
-            metrics[f"tavg_{metric}"] = val / (len(cuts) + 1)
+            metrics[f"tavg/{metric}"] = val / (len(cuts) + 1)
     return metrics
 
 
@@ -211,5 +211,43 @@ def evaluate_pred_dist_avgs(pred_dist_avgs, labels, num_labels, task_ids=None):
         for k, v in evaluate_predictions(
             pred_dist_avgs[avg], labels, num_labels, task_ids
         ).items():
-            res[f"{avg}_{k}"] = v
+            res[f"{avg}/{k}"] = v
+    return res
+
+
+def refit_eval(
+    model,
+    train_dataset,
+    batch_size,
+    task_ids,
+    test_hiddens,
+    batch_num_labels,
+    labels,
+    num_workers=1,
+    **kwargs,
+):
+    from bert_ordinal.label_dist import summarize_label_dists
+    from bert_ordinal.ordinal_models.vglm import (
+        label_dists_from_hiddens,
+        prepare_regressors,
+    )
+
+    res = {}
+    regressors = prepare_regressors(model, train_dataset, batch_size)
+    for family_name in ["cumulative", "acat"]:
+        label_dists = label_dists_from_hiddens(
+            family_name,
+            regressors,
+            task_ids,
+            test_hiddens,
+            batch_num_labels,
+            num_workers=num_workers,
+            **kwargs,
+        )
+        summarized_label_dists = summarize_label_dists(label_dists)
+        family_eval = evaluate_pred_dist_avgs(
+            summarized_label_dists, labels, batch_num_labels, task_ids
+        )
+        for k, v in family_eval.items():
+            res[f"refit/{family_name}/{k}"] = v
     return res

@@ -41,9 +41,9 @@ class TaskAtATimeSampler(Sampler):
         np.random.shuffle(self.batches)
 
     def __iter__(self):
-        self.reshuffle()
         for batch in self.batches:
             yield [int(x) for x in batch]
+        self.reshuffle()
 
     def __len__(self):
         return len(self.batches)
@@ -82,9 +82,9 @@ class LabelStratifiedTaskAtATimeSampler(Sampler):
         np.random.shuffle(self.batches)
 
     def __iter__(self):
-        self.reshuffle()
         for batch in self.batches:
             yield [int(x) for x in batch]
+        self.reshuffle()
 
     def __len__(self):
         return len(self.batches)
@@ -169,9 +169,9 @@ class FixedTaskLabelSampler(Sampler):
                     self.batches.append(batch)
 
     def __iter__(self):
-        self.reshuffle()
         for batch in self.batches:
             yield [int(x) for x in batch]
+        self.reshuffle()
 
     def __len__(self):
         return len(self.batches)

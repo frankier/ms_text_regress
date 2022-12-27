@@ -47,6 +47,13 @@ def find_num_downsampled_groups(max_dataset_size, group_sizes):
 def downsample_large_groups(
     df, group_keys, max_dataset_size, ignore_threshold=0, discard_ignore=False
 ):
+    """
+    This function downsamples large groups according to `group_keys` to the same
+    size, while smaller groups are kept as-is, subject to producing a final
+    sampling of size `max_dataset_size`. Groups with size less than
+    `ignore_threshold` are either discarded or not taken into account in terms
+    deciding which groups to downsample according to `discard_ignore`.
+    """
     groups = df.groupby(group_keys)
     group_sizes = groups.size()
     group_sizes.sort_values(ascending=False, inplace=True)
@@ -78,6 +85,13 @@ def downsample_large_groups(
 def downsample_large_groups_groupwise(
     df, outer_group_keys, inner_group_keys, max_dataset_size
 ):
+    """
+    This function downsamples large groups according to `outer_group_keys` to
+    the approximately the same size, while smaller groups are kept as-is,
+    subject to producing a final sampling of size `max_dataset_size`. The
+    downsampling is done groupwise with respect to `inner_group_size`, so that
+    these groups are not split up.
+    """
     groups = df.groupby(outer_group_keys)
     group_sizes = groups.size()
     group_sizes.sort_values(ascending=False, inplace=True)

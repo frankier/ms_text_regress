@@ -31,7 +31,7 @@ class TaskAtATimeSampler(Sampler):
 
     def reshuffle(self):
         self.batches = []
-        for task_id in self.task_ids:
+        for task_id in np.unique(self.task_ids):
             instances = ensure_full_batches(
                 np.where(self.task_ids == task_id)[0], self.batch_size
             )
@@ -69,7 +69,7 @@ class LabelStratifiedTaskAtATimeSampler(Sampler):
 
     def reshuffle(self):
         self.batches = []
-        for task_id in self.task_ids:
+        for task_id in np.unique(self.task_ids):
             instances = ensure_full_batches(
                 np.nonzero(self.task_ids == task_id)[0], self.batch_size
             )

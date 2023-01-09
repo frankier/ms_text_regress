@@ -161,7 +161,6 @@ class BertForMultiScaleThresholdRegression(BertPreTrainedModel, NormalizeHiddenM
 
         self.bert = BertModel(config)
         self.classifier = nn.Linear(config.hidden_size, 1)
-        self.batch_norm = nn.BatchNorm1d(1, affine=False)
         self.thresholds = nn.ParameterList(
             [torch.zeros(nl - 1) for nl in config.num_labels]
         )
@@ -211,7 +210,6 @@ class BertForMultiScaleThresholdRegression(BertPreTrainedModel, NormalizeHiddenM
 
         pooled_output = outputs[1]
         hidden_linear = self.classifier(pooled_output)
-        hidden_linear = self.batch_norm(hidden_linear)
 
         preds = threshold_preds(self.thresholds, task_ids, hidden_linear)
 

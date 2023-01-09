@@ -43,16 +43,17 @@ def vglm(
     if do_plus_one_smoothing:
         df = do_plus_one_smoothing(df, y_var, num_labels)
 
-    with localconverter(ro.default_converter + pandas2ri.converter):
-        if suppress_vglm_output:
-            base.sink("/dev/null", type="message")
-            base.sink("/dev/null")
-        try:
+    if suppress_vglm_output:
+        null_conn = base.textConnection(ro.NULL, "w")
+        base.sink(null_conn, type="message")
+        base.sink(null_conn)
+    try:
+        with localconverter(ro.default_converter + pandas2ri.converter):
             result = vgam.vglm(f"{y_var} ~ {x_var}", data=df, family=family)
-        finally:
-            if suppress_vglm_output:
-                base.sink(type="message")
-                base.sink()
+    finally:
+        if suppress_vglm_output:
+            base.sink(type="message")
+            base.sink()
     coefs_r = stats.coef(result, matrix=True)
     coefs = np.asarray(coefs_r)
     if do_fill_missing_coefs:

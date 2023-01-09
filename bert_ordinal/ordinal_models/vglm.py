@@ -1,4 +1,16 @@
+import threading
+
 import numpy as np
+
+local = threading.local()
+
+
+def get_r_imports():
+    from rpy2.robjects.packages import importr
+
+    if not hasattr(local, "r_imports"):
+        local.r_imports = (importr("VGAM"), importr("base"), importr("stats"))
+    return local.r_imports
 
 
 def vglm(
@@ -14,11 +26,8 @@ def vglm(
     import rpy2.robjects as ro
     from rpy2.robjects import pandas2ri
     from rpy2.robjects.conversion import localconverter
-    from rpy2.robjects.packages import importr
 
-    vgam = importr("VGAM")
-    base = importr("base")
-    stats = importr("stats")
+    vgam, base, stats = get_r_imports()
 
     if family_name == "cumulative_parallel":
         family = vgam.cumulative(parallel=True)

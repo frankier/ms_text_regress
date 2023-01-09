@@ -1,6 +1,7 @@
 import threading
 
 import numpy as np
+from tqdm.auto import tqdm
 
 local = threading.local()
 
@@ -173,11 +174,19 @@ def refit(family_name, regressors, num_workers, mask_vglm_errors=False, **kwargs
         mask_vglm_errors=mask_vglm_errors,
         **kwargs,
     )
-    with Pool(num_workers) as p:
-        for task_id, coefs in p.imap_unordered(
-            fit_one_task_partial, regressors.items()
-        ):
+    bar = tqdm(total=len(regressors))
+    if num_workers == 0:
+        for task_id, samples in regressors.items():
+            task_id, coefs = fit_one_task_partial((task_id, samples))
             all_coefs[task_id] = coefs
+            bar.update(1)
+    else:
+        with Pool(num_workers) as p:
+            for task_id, coefs in p.imap_unordered(
+                fit_one_task_partial, regressors.items()
+            ):
+                all_coefs[task_id] = coefs
+                bar.update(1)
 
     return all_coefs
 

@@ -5,6 +5,9 @@ from os.path import join as pjoin
 from typing import List, Optional, Tuple
 
 import torch
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
+from transformers.data.data_collator import DataCollatorWithPadding
 from transformers.models.bert.modeling_bert import BertConfig
 from transformers.utils import ModelOutput
 
@@ -27,19 +30,25 @@ class BertMultiLabelsConfig(BertMultiLabelsMixin, BertConfig):
 
 def inference_run(
     model,
+    tokenizer,
     train_dataset,
     batch_size,
     sample_size=None,
     train_mode=False,
     eval_mode=False,
-    yield_indices=False,
+    use_tqdm=False,
 ):
     if sample_size:
         train_dataset = train_dataset.shuffle(seed=42).select(range(sample_size))
-    input_ids = torch.tensor(train_dataset["input_ids"], device=model.device)
-    task_ids = torch.tensor(
-        train_dataset["task_ids"], device=model.device, dtype=torch.long
-    ).unsqueeze(-1)
+    dataloader = DataLoader(
+        train_dataset,
+        batch_size,
+        shuffle=False,
+        collate_fn=DataCollatorWithPadding(tokenizer),
+        pin_memory=True,
+    )
+
+    bar = tqdm(total=len(dataloader), disable=not use_tqdm)
     with torch.inference_mode():
         if eval_mode or train_mode:
             orig_training = model.training
@@ -47,27 +56,30 @@ def inference_run(
                 model.train()
             else:
                 model.eval()
-        for chunk in range(0, len(input_ids), batch_size):
-            idx_slice = slice(chunk, chunk + batch_size)
+        for batch in dataloader:
             result = model.forward(
-                input_ids=input_ids[idx_slice],
-                task_ids=task_ids[idx_slice],
-                labels=None,
+                input_ids=batch["input_ids"].to(model.device, non_blocking=True),
+                attention_mask=batch["attention_mask"].to(
+                    model.device, non_blocking=True
+                ),
+                token_type_ids=batch["token_type_ids"].to(
+                    model.device, non_blocking=True
+                ),
             )
-            if yield_indices:
-                yield result, idx_slice
-            else:
-                yield result
+            yield batch, result
+            bar.update(1)
         if train_mode or eval_mode:
             model.train(orig_training)
 
 
 class NormalizeHiddenMixin:
-    def init_std_hidden_pilot(self, train_dataset, sample_size, batch_size):
+    def init_std_hidden_pilot(self, train_dataset, tokenizer, sample_size, batch_size):
         hiddens = torch.vstack(
             [
                 out.hidden_linear
-                for out in inference_run(self, train_dataset, batch_size, sample_size)
+                for out in inference_run(
+                    self, train_dataset, tokenizer, batch_size, sample_size
+                )
             ]
         )
         self.init_std_hidden(hiddens)

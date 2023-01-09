@@ -217,6 +217,7 @@ def evaluate_pred_dist_avgs(pred_dist_avgs, labels, num_labels, task_ids=None):
 
 def refit_eval(
     model,
+    tokenizer,
     train_dataset,
     batch_size,
     task_ids,
@@ -233,7 +234,7 @@ def refit_eval(
     )
 
     res = {}
-    regressors = prepare_regressors(model, train_dataset, batch_size)
+    regressors = prepare_regressors(model, tokenizer, train_dataset, batch_size)
     for family_name in ["cumulative", "acat"]:
         label_dists = label_dists_from_hiddens(
             family_name,

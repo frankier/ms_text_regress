@@ -112,23 +112,25 @@ def plus_one_smoothing(df, x_var, y_var, num_labels):
     return pd.concat([df, pd.DataFrame({x_var: xs, y_var: ys})])
 
 
-def prepare_regressors(model, train_dataset, batch_size):
+def prepare_regressors(model, tokenizer, train_dataset, batch_size):
     from bert_ordinal.transformers_utils import inference_run
 
     regressors = {}
-    for result_batch, idx_slice in inference_run(
-        model, train_dataset, batch_size, eval_mode=True, yield_indices=True
+    for batch, result in inference_run(
+        model, tokenizer, train_dataset, batch_size, eval_mode=True, use_tqdm=True
     ):
         batch_info = zip(
-            train_dataset["task_ids"][idx_slice],
-            train_dataset["label"][idx_slice],
-            train_dataset["scale_points"][idx_slice],
-            result_batch.hidden_linear,
+            batch["task_ids"],
+            batch["labels"],
+            batch["scale_points"],
+            result.hidden_linear,
         )
         for task_id, label, scale_points, hidden_linear in batch_info:
-            xs, ys, _ = regressors.setdefault(task_id, ([], [], scale_points))
+            xs, ys, _ = regressors.setdefault(
+                task_id.item(), ([], [], scale_points.item())
+            )
             xs.append(hidden_linear.item())
-            ys.append(label)
+            ys.append(label.item())
     return regressors
 
 

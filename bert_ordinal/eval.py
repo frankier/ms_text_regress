@@ -224,6 +224,7 @@ def refit_eval(
     test_hiddens,
     batch_num_labels,
     labels,
+    dump_writer=None,
     num_workers=1,
     **kwargs,
 ):
@@ -234,7 +235,9 @@ def refit_eval(
     )
 
     res = {}
-    regressors = prepare_regressors(model, tokenizer, train_dataset, batch_size)
+    regressors = prepare_regressors(
+        model, tokenizer, train_dataset, batch_size, dump_writer=dump_writer
+    )
     for family_name in ["cumulative", "acat"]:
         label_dists = label_dists_from_hiddens(
             family_name,

@@ -1,10 +1,15 @@
 import json
+import os
 import pickle
 import sys
+from os.path import join as pjoin
 
+import numpy as np
+import orjson
 import pandas
 import torch
 from transformers import AutoTokenizer
+from transformers.trainer_callback import TrainerCallback
 
 from bert_ordinal.datasets import auto_dataset
 from bert_ordinal.transformers_utils import auto_pipeline
@@ -75,3 +80,76 @@ def dump_task_thresholds(model, task_thresholds):
             )
     with open(task_thresholds, "wb") as f:
         pickle.dump(task_outs, f)
+
+
+class DumpWriter:
+    def __init__(self, out_base, segments=("train", "test")):
+        self.out_base = out_base
+        self.segments = segments
+        self.step = 0
+        self.index_data = {seg: [] for seg in segments}
+        self.reset_current_epoch()
+
+    def start_epoch(self, step):
+        self.step = step
+
+    def add_info_full(self, segment, **kwargs):
+        for k, v in kwargs.items():
+            self.current_epoch_data[segment][k] = ("full", v)
+
+    def add_info_chunk(self, segment, **kwargs):
+        seg_data = self.current_epoch_data[segment]
+        for k, v in kwargs.items():
+            if k in seg_data:
+                assert seg_data[k][0] == "chunk"
+                seg_data[k][1].append(v)
+            else:
+                seg_data[k] = ("chunk", [v])
+
+    def ensure_path(self, path):
+        os.makedirs(pjoin(self.out_base, path), exist_ok=True)
+
+    def finish_epoch(self):
+        for seg in self.segments:
+            dump_path = pjoin(seg, f"step-{self.step}.jsonl")
+            self.ensure_path(seg)
+            data = self.current_epoch_data[seg]
+            with open(pjoin(self.out_base, dump_path), "wb") as f:
+                keys = data.keys()
+                vals = []
+                for typ, v in data.values():
+                    if typ == "chunk":
+                        v = np.hstack(v)
+                    vals.append(v)
+                for tpl in zip(*vals):
+                    d = dict(zip(keys, tpl))
+                    f.write(orjson.dumps(d, option=orjson.OPT_SERIALIZE_NUMPY))
+                    f.write(b"\n")
+            self.index_data[seg].append(
+                {
+                    "nick": str(self.step),
+                    "dump": dump_path,
+                }
+            )
+        self.reset_current_epoch()
+
+    def reset_current_epoch(self):
+        self.current_epoch_data = {seg: {} for seg in self.segments}
+
+    def finish_dump(self):
+        with open(pjoin(self.out_base, "index.json"), "w") as f:
+            json.dump(self.index_data, f)
+
+
+class DumpWriterCallback(TrainerCallback):
+    def __init__(self, out_base):
+        self.dump_writer = DumpWriter(out_base)
+
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        self.dump_writer.start_epoch(state.global_step)
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        self.dump_writer.finish_epoch()
+
+    def on_train_end(self, args, state, control, **kwargs):
+        self.dump_writer.finish_dump()

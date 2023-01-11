@@ -123,13 +123,17 @@ def plus_one_smoothing(df, x_var, y_var, num_labels):
     return pd.concat([df, pd.DataFrame({x_var: xs, y_var: ys})])
 
 
-def prepare_regressors(model, tokenizer, train_dataset, batch_size):
+def prepare_regressors(model, tokenizer, train_dataset, batch_size, dump_writer=None):
     from bert_ordinal.transformers_utils import inference_run
 
     regressors = {}
     for batch, result in inference_run(
         model, tokenizer, train_dataset, batch_size, eval_mode=True, use_tqdm=True
     ):
+        if dump_writer is not None:
+            dump_writer.add_info_chunk(
+                "train", hidden=result.hidden_linear.detach().cpu().numpy().squeeze(-1)
+            )
         batch_info = zip(
             batch["task_ids"],
             batch["labels"],

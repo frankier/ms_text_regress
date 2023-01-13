@@ -154,6 +154,12 @@ def auto_load(model):
         )
 
         return BertForMultiScaleSequenceRegression.from_pretrained(model)
+    elif architecture == "BertForMultiMonotonicTransformSequenceRegression":
+        from bert_ordinal.experimental_regression import (
+            BertForMultiMonotonicTransformSequenceRegression,
+        )
+
+        return BertForMultiMonotonicTransformSequenceRegression.from_pretrained(model)
     else:
         raise ValueError(f"Unknown architecture {architecture}")
 

@@ -280,9 +280,11 @@ if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13")
             )
 
         def pilot_quantile_init(
-            self, train_dataset, sample_size, batch_size, peak_class_prob=0.8
+            self, train_dataset, tokenizer, sample_size, batch_size, peak_class_prob=0.8
         ):
-            self.init_std_hidden_pilot(train_dataset, sample_size, batch_size)
+            self.init_std_hidden_pilot(
+                train_dataset, tokenizer, sample_size, batch_size
+            )
             for task_id, cutoffs in iter_task_normal_cutoffs(train_dataset):
                 print(cutoffs)
                 self.cutoffs.set_cutoffs(

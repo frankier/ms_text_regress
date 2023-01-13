@@ -124,9 +124,9 @@ class DumpWriter:
         self.segments = segments
         self.step = 0
         self.index_data = {seg: [] for seg in segments}
-        self.reset_current_epoch()
 
-    def start_epoch(self, step):
+    def start_step_dump(self, step):
+        self.reset_current_epoch()
         self.step = step
 
     def add_info_full(self, segment, **kwargs):
@@ -145,7 +145,28 @@ class DumpWriter:
     def ensure_path(self, path):
         os.makedirs(pjoin(self.out_base, path), exist_ok=True)
 
-    def finish_epoch(self):
+    def finish_step_dump(self, model):
+        from bert_ordinal.experimental_regression import (
+            BertForMultiMonotonicTransformSequenceRegression,
+        )
+        from bert_ordinal.ordinal_models.bert import BertForMultiScaleOrdinalRegression
+
+        thresholds_path = None
+        if isinstance(
+            model,
+            (
+                BertForMultiScaleOrdinalRegression,
+                BertForMultiMonotonicTransformSequenceRegression,
+            ),
+        ):
+            os.makedirs(self.out_base, exist_ok=True)
+            thresholds_path = f"thresholds-{self.step}.pkl"
+            full_thresholds_path = pjoin(self.out_base, thresholds_path)
+            if isinstance(model, BertForMultiScaleOrdinalRegression):
+                dump_task_thresholds(model, full_thresholds_path)
+            else:
+                dump_task_monotonic_funcs(model, full_thresholds_path)
+
         for seg in self.segments:
             dump_path = pjoin(seg, f"step-{self.step}.jsonl")
             self.ensure_path(seg)
@@ -165,9 +186,9 @@ class DumpWriter:
                 {
                     "nick": str(self.step),
                     "dump": dump_path,
+                    **({"thresholds": thresholds_path} if thresholds_path else {}),
                 }
             )
-        self.reset_current_epoch()
 
     def reset_current_epoch(self):
         self.current_epoch_data = {seg: {} for seg in self.segments}
@@ -180,12 +201,6 @@ class DumpWriter:
 class DumpWriterCallback(TrainerCallback):
     def __init__(self, out_base):
         self.dump_writer = DumpWriter(out_base)
-
-    def on_epoch_begin(self, args, state, control, **kwargs):
-        self.dump_writer.start_epoch(state.global_step)
-
-    def on_epoch_end(self, args, state, control, **kwargs):
-        self.dump_writer.finish_epoch()
 
     def on_train_end(self, args, state, control, **kwargs):
         self.dump_writer.finish_dump()

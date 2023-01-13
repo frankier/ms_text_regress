@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from os.path import join as pjoin
 from typing import List, Optional, Tuple
 
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
@@ -89,6 +90,15 @@ class NormalizeHiddenMixin:
         std = hiddens.std()
         self.classifier.bias.data = (self.classifier.bias.data - mean) / std
         self.classifier.weight.data /= std
+
+
+def group_labels(task_ids: np.array, labels: np.array):
+    sort_idxs = task_ids.argsort()
+    task_ids = task_ids[sort_idxs]
+    labels = labels[sort_idxs]
+    grouped_task_ids, task_group_idxs = np.unique(task_ids, return_index=True)
+    groups = np.split(labels, task_group_idxs[1:])
+    return grouped_task_ids, groups
 
 
 @dataclass

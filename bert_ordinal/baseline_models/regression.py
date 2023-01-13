@@ -20,6 +20,7 @@ from bert_ordinal.transformers_utils import (
     BertMultiLabelsMixin,
     LatentRegressionOutput,
     NormalizeHiddenMixin,
+    group_labels,
 )
 
 
@@ -166,19 +167,33 @@ class BertForMultiScaleSequenceRegression(BertPreTrainedModel, NormalizeHiddenMi
         )
 
     def init_scales_empirical(
-        self, task_ids: np.array, labels: np.array, min_samples_per_group=0
+        self, task_ids: np.array, labels: np.array, min_samples_per_group=20
     ):
         self._zero_bias()
-        sort_idxs = task_ids.argsort()
-        task_ids = task_ids[sort_idxs]
-        labels = labels[sort_idxs]
-        grouped_task_ids, task_group_idxs = np.unique(task_ids, return_index=True)
-        groups = np.split(labels, task_group_idxs[1:])
+        self._init_scale_empirical(task_ids, labels, min_samples_per_group)
+
+    def _init_scales_empirical(
+        self, task_ids: np.array, labels: np.array, min_samples_per_group=20
+    ):
+        grouped_task_ids, groups = group_labels(task_ids, labels)
         for task_id, group in zip(grouped_task_ids, groups):
             if len(group) < min_samples_per_group:
                 self._init_scale_range(task_id)
             else:
                 self._init_scale_empirical(task_id, group)
+
+    def pilot_quantile_init(
+        self,
+        train_dataset,
+        tokenizer,
+        sample_size,
+        batch_size,
+        task_ids: np.array,
+        labels: np.array,
+        min_samples_per_group=20,
+    ):
+        self.init_std_hidden_pilot(train_dataset, tokenizer, sample_size, batch_size)
+        self._init_scales_empirical(task_ids, labels, min_samples_per_group)
 
     def init_scales_range(self):
         for task_id in range(len(self.num_labels)):

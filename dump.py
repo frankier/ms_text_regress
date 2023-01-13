@@ -5,7 +5,11 @@ from bert_ordinal.baseline_models.classification import (
     BertForMultiScaleSequenceClassification,
 )
 from bert_ordinal.baseline_models.regression import BertForMultiScaleSequenceRegression
-from bert_ordinal.dump import dump_results, dump_task_thresholds
+from bert_ordinal.dump import (
+    dump_results,
+    dump_task_monotonic_funcs,
+    dump_task_thresholds,
+)
 from bert_ordinal.transformers_utils import auto_load
 
 
@@ -16,7 +20,12 @@ def parse_args():
     )
     parser.add_argument("--model", help="Input directory of model dump", required=True)
     parser.add_argument("--results", help="Output file for eval dump")
-    parser.add_argument("--task-thresholds", help="Output file for label model dump")
+    parser.add_argument(
+        "--task-thresholds", help="Output file for label thresholds dump"
+    )
+    parser.add_argument(
+        "--task-mono-funcs", help="Output file for monotonic thresholds dump"
+    )
     parser.add_argument("--head", type=int, help="Only evaluate the first N examples")
     parser.add_argument("--split", help="Dataset split to use", default="test")
     return parser.parse_args()
@@ -40,6 +49,8 @@ def main():
         dump_results(model, args.dataset, args.results, args.head, args.split)
     if args.task_thresholds is not None:
         dump_task_thresholds(model, args.task_thresholds)
+    if args.task_mono_funcs is not None:
+        dump_task_monotonic_funcs(model, args.task_mono_funcs)
 
 
 if __name__ == "__main__":

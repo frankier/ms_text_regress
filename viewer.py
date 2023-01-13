@@ -142,6 +142,26 @@ def plot_hidden_dist(task_info, hidden=None):
         return lines
 
 
+def plot_hidden_mono_func(task_info, hidden=None):
+    lines = (
+        alt.Chart(task_info)
+        .mark_line()
+        .encode(
+            x="x",
+            y="score",
+        )
+    )
+    if hidden is not None:
+        hidden_mark = (
+            alt.Chart(alt.Data(values=[{"hidden": hidden}]))
+            .mark_rule(color="black")
+            .encode(x="hidden:Q")
+        )
+        return lines + hidden_mark
+    else:
+        return lines
+
+
 def melt_conf_mat(confmat):
     trues = []
     preds = []
@@ -189,16 +209,22 @@ def plot_conf_mat(outputs, targets, scale_points):
 
 
 def plot_task(task_info, hidden=None):
-    st.altair_chart(
-        plot_hidden_dist(task_info["hidden_to_elmo"], hidden).interactive(),
-        use_container_width=True,
-    )
-    st.json(
-        {
-            "discrimination": task_info["discrimination"],
-            "offsets": task_info["offsets"],
-        }
-    )
+    if "hidden_to_elmo" in task_info:
+        st.altair_chart(
+            plot_hidden_dist(task_info["hidden_to_elmo"], hidden).interactive(),
+            use_container_width=True,
+        )
+        st.json(
+            {
+                "discrimination": task_info["discrimination"],
+                "offsets": task_info["offsets"],
+            }
+        )
+    else:
+        st.altair_chart(
+            plot_hidden_mono_func(task_info["hidden_to_label"], hidden).interactive(),
+            use_container_width=True,
+        )
 
 
 AVGS = ["median", "mode", "mean"]
@@ -261,6 +287,7 @@ def get_review_score_map(df):
 
 
 def plot_paths(dump_path, thresholds_path, zip_with=None, zip_with_seg=None):
+    selected_rows = None
     if dump_path:
         records, df = load_data(dump_path, zip_with, zip_with_seg)
         selection = aggrid_interactive_table(df)
@@ -270,13 +297,10 @@ def plot_paths(dump_path, thresholds_path, zip_with=None, zip_with_seg=None):
                 yield int(row["_selectedRowNodeInfo"]["nodeId"])
 
         selected_rows = selection.selected_rows
-    else:
-        selected_rows = None
 
+    task_infos = None
     if thresholds_path is not None:
         task_infos = get_task_infos(thresholds_path)
-    else:
-        task_infos = None
 
     if selected_rows and len(selected_rows) == 1:
         selected_record = records[next(get_selected_records())]

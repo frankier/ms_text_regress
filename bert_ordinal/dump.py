@@ -82,6 +82,42 @@ def dump_task_thresholds(model, task_thresholds):
         pickle.dump(task_outs, f)
 
 
+def bisect(f, y, a, b, n, device=None):
+    a = torch.tensor(a, device=device).reshape(1, 1)
+    b = torch.tensor(b, device=device).reshape(1, 1)
+    for _ in range(int(n)):
+        c = (a + b) / 2
+
+        mask = f(c) < y
+
+        a = torch.where(mask, c, a)
+        b = torch.where(mask, b, c)
+
+    return (a + b) / 2
+
+
+def dump_task_monotonic_funcs(model, monotonic_funcs):
+    task_outs = []
+    with torch.inference_mode():
+        for task_id, num_labels in enumerate(model.num_labels):
+            f = model.scales[task_id].forward
+            min_latent = bisect(f, 0, -50, 50, 1e3, device=model.device).item()
+            max_latent = bisect(
+                f, num_labels - 1, -50, 50, 1e3, device=model.device
+            ).item()
+            xs = torch.linspace(min_latent, max_latent, 100, device=model.device)
+            out = f(xs.unsqueeze(-1)).squeeze(-1).detach().cpu().numpy()
+            task_outs.append(
+                {
+                    "hidden_to_label": pandas.DataFrame(
+                        {"x": xs.cpu().numpy(), "score": out}
+                    )
+                }
+            )
+    with open(monotonic_funcs, "wb") as f:
+        pickle.dump(task_outs, f)
+
+
 class DumpWriter:
     def __init__(self, out_base, segments=("train", "test")):
         self.out_base = out_base

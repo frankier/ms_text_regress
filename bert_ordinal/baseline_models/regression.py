@@ -10,7 +10,6 @@ from transformers.models.bert.modeling_bert import (
     BertConfig,
     BertModel,
     BertPreTrainedModel,
-    SequenceClassifierOutput,
 )
 from transformers.utils import (
     add_start_docstrings,
@@ -85,7 +84,7 @@ class BertForMultiScaleSequenceRegression(BertPreTrainedModel, NormalizeHiddenMi
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[Tuple[torch.Tensor], SequenceClassifierOutput]:
+    ) -> Union[Tuple[torch.Tensor], LatentRegressionOutput]:
         r"""
         task_ids (`torch.LongTensor` of shape `(batch_size,)`):
             Task ids for each example. Should be in half-open range `(0,

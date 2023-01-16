@@ -79,7 +79,7 @@ class NormalizeHiddenMixin:
             [
                 out.hidden_linear
                 for out in inference_run(
-                    self, train_dataset, tokenizer, batch_size, sample_size
+                    self, tokenizer, train_dataset, batch_size, sample_size
                 )
             ]
         )

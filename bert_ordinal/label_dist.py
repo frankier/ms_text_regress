@@ -35,3 +35,11 @@ def summarize_label_dists(label_dists):
         label_dist_sum = summarize_label_dist(label_dist)
         res = {k: [*res[k], v] for k, v in label_dist_sum.items()}
     return {k: torch.hstack(v) for k, v in res.items()}
+
+
+def clip_predictions_np(raw_predictions, batch_num_labels):
+    import numpy as np
+
+    return np.clip(raw_predictions.squeeze(-1) + 0.5, 0, batch_num_labels - 1).astype(
+        int
+    )

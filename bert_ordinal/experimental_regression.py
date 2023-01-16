@@ -1,8 +1,11 @@
+import copy
+import math
 from typing import Optional, Tuple, Union
 
 import numpy as np
 import torch
 from torch import nn
+from torch.optim import LBFGS
 from transformers.models.bert.modeling_bert import BertModel, BertPreTrainedModel
 
 # from UMNN import MonotonicNN
@@ -129,21 +132,12 @@ class BertForMultiMonotonicTransformSequenceRegression(
             attentions=outputs.attentions,
         )
 
-    def pilot_quantile_init(
-        self,
-        train_dataset,
-        tokenizer,
-        sample_size,
-        batch_size,
-        task_ids: np.array,
-        labels: np.array,
-        min_samples_per_group=20,
-    ):
+    def norm_hiddens(self, train_dataset, tokenizer, batch_size, sample_size=None):
         hiddens = torch.vstack(
             [
-                out.hidden_linear
+                out[1].hidden_linear
                 for out in inference_run(
-                    self, train_dataset, tokenizer, batch_size, sample_size
+                    self, tokenizer, train_dataset, batch_size, sample_size=sample_size
                 )
             ]
         )
@@ -153,7 +147,12 @@ class BertForMultiMonotonicTransformSequenceRegression(
         self.classifier.bias.data = (self.classifier.bias.data - mean) / std
         self.classifier.weight.data /= std
         # Step 2.
-        hiddens = (hiddens - mean) / std
+        return (hiddens - mean) / std
+
+    def pilot_quantile_init(self, train_dataset, tokenizer, sample_size, batch_size):
+        hiddens = self.norm_hiddens(train_dataset, tokenizer, batch_size, sample_size)
+        task_ids = np.asarray(train_dataset["task_ids"])
+        labels = np.asarray(train_dataset["label"])
         grouped_task_ids, groups = group_labels(task_ids, labels)
         for task_id, group in zip(grouped_task_ids, groups):
             # We don't even pay attention to the fact that these examples are not from the correct group here
@@ -167,3 +166,48 @@ class BertForMultiMonotonicTransformSequenceRegression(
                 self.scales[task_id][-1].bias.data - scale_mean
             ) / scale_std + group_mean
             self.scales[task_id][-1].weight.data *= group_std / scale_std
+
+    def train_scale(self, task_id, hiddens, labels):
+        self.scales[task_id].train()
+        opt = LBFGS(self.scales[task_id].parameters())
+
+        best_loss = float("inf")
+        best_state_dict = None
+        for itr in range(0, 10):
+
+            def loss_closure():
+                opt.zero_grad()
+                out = self.scales[task_id](hiddens)
+                loss_val = self.loss_fct(out, labels)
+                loss_val.backward()
+                return loss_val
+
+            loss = opt.step(loss_closure)
+            if math.isnan(loss):
+                break
+            if loss < best_loss:
+                best_loss = loss
+                best_state_dict = copy.deepcopy(self.scales[task_id].state_dict())
+
+        self.scales[task_id].load_state_dict(best_state_dict)
+
+    def pilot_train_init(self, train_dataset, tokenizer, batch_size):
+        hiddens = self.norm_hiddens(train_dataset, tokenizer, batch_size).squeeze(-1)
+        task_ids = torch.tensor(train_dataset["task_ids"], device=self.device)
+        labels = torch.tensor(train_dataset["label"], device=self.device)
+        task_id_sort_perm = torch.argsort(task_ids)
+        hiddens = hiddens[task_id_sort_perm]
+        task_ids = task_ids[task_id_sort_perm]
+        labels = labels[task_id_sort_perm]
+        group_task_ids, group_sizes = torch.unique(task_ids, return_counts=True)
+        group_sizes = tuple(group_sizes)
+        for task_id, task_hiddens, task_labels in zip(
+            group_task_ids,
+            torch.split_with_sizes(hiddens, group_sizes),
+            torch.split_with_sizes(labels, group_sizes),
+        ):
+            task_hiddens = torch.sort(task_hiddens)[0]
+            task_labels = torch.sort(task_labels)[0]
+            self.train_scale(
+                task_id, task_hiddens.unsqueeze(-1), task_labels.unsqueeze(-1)
+            )

@@ -188,11 +188,11 @@ class BertForMultiScaleSequenceRegression(BertPreTrainedModel, NormalizeHiddenMi
         tokenizer,
         sample_size,
         batch_size,
-        task_ids: np.array,
-        labels: np.array,
         min_samples_per_group=20,
     ):
         self.init_std_hidden_pilot(train_dataset, tokenizer, sample_size, batch_size)
+        task_ids = np.asarray(train_dataset["task_ids"])
+        labels = np.asarray(train_dataset["label"])
         self._init_scales_empirical(task_ids, labels, min_samples_per_group)
 
     def init_scales_range(self):

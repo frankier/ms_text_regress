@@ -137,7 +137,13 @@ class BertForMultiMonotonicTransformSequenceRegression(
             [
                 out[1].hidden_linear
                 for out in inference_run(
-                    self, tokenizer, train_dataset, batch_size, sample_size=sample_size
+                    # Use eval mode because we don't want dropout
+                    self,
+                    tokenizer,
+                    train_dataset,
+                    batch_size,
+                    sample_size=sample_size,
+                    eval_mode=True,
                 )
             ]
         )

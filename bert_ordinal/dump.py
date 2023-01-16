@@ -119,11 +119,13 @@ def dump_task_monotonic_funcs(model, monotonic_funcs):
 
 
 class DumpWriter:
-    def __init__(self, out_base, segments=("train", "test")):
+    def __init__(self, out_base, zip_with=None, segments=("train", "test")):
         self.out_base = out_base
         self.segments = segments
         self.step = 0
         self.index_data = {seg: [] for seg in segments}
+        if zip_with is not None:
+            self.index_data["_zip_with"] = zip_with
 
     def start_step_dump(self, step):
         self.reset_current_epoch()
@@ -199,8 +201,8 @@ class DumpWriter:
 
 
 class DumpWriterCallback(TrainerCallback):
-    def __init__(self, out_base):
-        self.dump_writer = DumpWriter(out_base)
+    def __init__(self, out_base, **kwargs):
+        self.dump_writer = DumpWriter(out_base, **kwargs)
 
     def on_train_end(self, args, state, control, **kwargs):
         self.dump_writer.finish_dump()

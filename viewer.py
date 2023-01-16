@@ -28,7 +28,8 @@ def load_data(path, zip_with=None, zip_with_seg=None):
         zip_with_data = datasets.load_from_disk(zip_with)[zip_with_seg]
         with open(path, "rb") as f:
             records = [
-                {**orjson.loads(line), **rec} for line, rec in zip(f, zip_with_data)
+                {**orjson.loads(line), **rec}
+                for line, rec in zip(f, zip_with_data, strict=True)
             ]
     else:
         with open(path, "rb") as f:

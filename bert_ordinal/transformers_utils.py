@@ -38,6 +38,7 @@ def inference_run(
     train_mode=False,
     eval_mode=False,
     use_tqdm=False,
+    pass_task_ids=False,
 ):
     if sample_size:
         train_dataset = train_dataset.shuffle(seed=42).select(range(sample_size))
@@ -58,6 +59,10 @@ def inference_run(
             else:
                 model.eval()
         for batch in dataloader:
+            if pass_task_ids:
+                kwargs = {"task_ids": batch["task_ids"]}
+            else:
+                kwargs = {}
             result = model.forward(
                 input_ids=batch["input_ids"].to(model.device, non_blocking=True),
                 attention_mask=batch["attention_mask"].to(
@@ -66,6 +71,7 @@ def inference_run(
                 token_type_ids=batch["token_type_ids"].to(
                     model.device, non_blocking=True
                 ),
+                **kwargs,
             )
             yield batch, result
             bar.update(1)

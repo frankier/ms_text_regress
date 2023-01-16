@@ -45,6 +45,7 @@ def load_data(path, zip_with=None, zip_with_seg=None):
                 "review_score",
                 "task_ids",
                 *(k for k in [*PRED_AVGS, "hidden"] if k in records[0]),
+                *(k for k in records[0] if k.startswith("pred/") or k == "pred"),
             ]
         }
         for row in records
@@ -234,21 +235,25 @@ AVGS = ["median", "mode", "mean"]
 def multi_conf_mat(selected_df):
     from bert_ordinal.eval import evaluate_predictions
 
-    known_ags = [avg for avg in AVGS if avg in selected_df.columns]
-    if not known_ags:
+    known_preds = [
+        pred
+        for pred in selected_df.columns
+        if pred.startswith("pred/") or pred == "pred"
+    ]
+    if not known_preds:
         return
-    tabs = st.tabs(known_ags)
-    for avg, tab in zip(known_ags, tabs):
+    tabs = st.tabs(known_preds)
+    for pred_name, tab in zip(known_preds, tabs):
         with tab:
             st.altair_chart(
                 plot_conf_mat(
-                    selected_df[avg],
+                    selected_df[pred_name],
                     selected_df["label"],
                     selected_df["scale_points"].max(),
-                ).properties(title=avg.title())
+                ).properties(title=pred_name.title())
             )
-            if st.button("Calculate metrics", key=avg):
-                predictions = selected_df[avg].to_numpy()
+            if st.button("Calculate metrics", key=pred_name):
+                predictions = selected_df[pred_name].to_numpy()
                 targets = selected_df["label"].to_numpy()
                 scale_points = selected_df["scale_points"].to_numpy()
                 st.json(evaluate_predictions(predictions, targets, scale_points))

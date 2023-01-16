@@ -225,6 +225,7 @@ def refit_eval(
     batch_num_labels,
     labels,
     dump_writer=None,
+    dump_callback=None,
     num_workers=1,
     **kwargs,
 ):
@@ -236,7 +237,12 @@ def refit_eval(
 
     res = {}
     regressors = prepare_regressors(
-        model, tokenizer, train_dataset, batch_size, dump_writer=dump_writer
+        model,
+        tokenizer,
+        train_dataset,
+        batch_size,
+        dump_writer=dump_writer,
+        dump_callback=dump_callback,
     )
     for family_name in ["cumulative", "acat"]:
         label_dists = label_dists_from_hiddens(
@@ -249,6 +255,14 @@ def refit_eval(
             **kwargs,
         )
         summarized_label_dists = summarize_label_dists(label_dists)
+        if dump_writer is not None:
+            dump_writer.add_info_full(
+                "test",
+                **{
+                    f"pred/refit/{family_name}/{avg}": v.cpu().numpy()
+                    for avg, v in summarized_label_dists.items()
+                },
+            )
         family_eval = evaluate_pred_dist_avgs(
             summarized_label_dists, labels, batch_num_labels, task_ids
         )

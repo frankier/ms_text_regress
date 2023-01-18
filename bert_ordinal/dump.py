@@ -204,5 +204,9 @@ class DumpWriterCallback(TrainerCallback):
     def __init__(self, out_base, **kwargs):
         self.dump_writer = DumpWriter(out_base, **kwargs)
 
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.global_step == 1:
+            control.should_evaluate = True
+
     def on_train_end(self, args, state, control, **kwargs):
         self.dump_writer.finish_dump()

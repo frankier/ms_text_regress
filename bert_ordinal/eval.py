@@ -226,7 +226,8 @@ def refit_eval(
     labels,
     dump_writer=None,
     dump_callback=None,
-    num_workers=1,
+    num_workers=0,
+    pool=None,
     **kwargs,
 ):
     from bert_ordinal.label_dist import summarize_label_dists
@@ -252,6 +253,7 @@ def refit_eval(
             test_hiddens,
             batch_num_labels,
             num_workers=num_workers,
+            pool=pool,
             **kwargs,
         )
         summarized_label_dists = summarize_label_dists(label_dists)

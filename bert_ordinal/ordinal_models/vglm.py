@@ -177,10 +177,27 @@ def fit_one_task(item, family_name, mask_vglm_errors=False, **kwargs):
         return task_id, coefs
 
 
-def refit(family_name, regressors, num_workers, mask_vglm_errors=False, **kwargs):
-    from functools import partial
-
+def imap_unordered(callback, iterable, num_workers=0, pool=None):
     from torch.multiprocessing import Pool
+
+    if num_workers == 0:
+        for item in iterable:
+            yield callback(item)
+    else:
+        if pool is None:
+            pool = Pool(num_workers)
+            with pool as p:
+                for item in p.imap_unordered(callback, iterable):
+                    yield item
+        else:
+            for item in pool.imap_unordered(callback, iterable):
+                yield item
+
+
+def refit(
+    family_name, regressors, num_workers=0, pool=None, mask_vglm_errors=False, **kwargs
+):
+    from functools import partial
 
     all_coefs = {}
 
@@ -191,18 +208,11 @@ def refit(family_name, regressors, num_workers, mask_vglm_errors=False, **kwargs
         **kwargs,
     )
     bar = tqdm(total=len(regressors))
-    if num_workers == 0:
-        for task_id, samples in regressors.items():
-            task_id, coefs = fit_one_task_partial((task_id, samples))
-            all_coefs[task_id] = coefs
-            bar.update(1)
-    else:
-        with Pool(num_workers) as p:
-            for task_id, coefs in p.imap_unordered(
-                fit_one_task_partial, regressors.items()
-            ):
-                all_coefs[task_id] = coefs
-                bar.update(1)
+    for task_id, coefs in imap_unordered(
+        fit_one_task_partial, regressors.items(), num_workers=num_workers, pool=pool
+    ):
+        all_coefs[task_id] = coefs
+        bar.update(1)
 
     return all_coefs
 
@@ -213,7 +223,8 @@ def label_dists_from_hiddens(
     task_ids,
     test_hiddens,
     batch_num_labels,
-    num_workers=1,
+    num_workers=0,
+    pool=None,
     **kwargs,
 ):
     import torch
@@ -221,7 +232,7 @@ def label_dists_from_hiddens(
     from bert_ordinal.element_link import get_link_by_name
 
     link = get_link_by_name("fwd_" + family_name)
-    coefs = refit(family_name, regressors, num_workers, **kwargs)
+    coefs = refit(family_name, regressors, num_workers, pool, **kwargs)
     label_dists = []
     for task_id, test_hidden, nl in zip(
         task_ids, test_hiddens, batch_num_labels, strict=True

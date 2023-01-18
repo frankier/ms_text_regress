@@ -59,6 +59,11 @@ class BertForMultiMonotonicTransformSequenceRegression(
         # Initialize weights and apply final processing
         self.post_init()
 
+    def shared_parameters(self):
+        yield from self.bert.parameters()
+        yield from self.dropout.parameters()
+        yield from self.classifier.parameters()
+
     def forward(
         self,
         input_ids: Optional[torch.Tensor] = None,

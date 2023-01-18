@@ -44,6 +44,7 @@ def load_data(path, zip_with=None, zip_with_seg=None):
                 "scale_points",
                 "review_score",
                 "task_ids",
+                "critic_name",
                 *(k for k in [*PRED_AVGS, "hidden"] if k in records[0]),
                 *(k for k in records[0] if k.startswith("pred/") or k == "pred"),
             ]

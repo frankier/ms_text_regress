@@ -200,7 +200,7 @@ class BertForMultiMonotonicTransformSequenceRegression(
     def pilot_train_init(self, train_dataset, tokenizer, batch_size):
         hiddens = self.norm_hiddens(train_dataset, tokenizer, batch_size).squeeze(-1)
         task_ids = torch.tensor(train_dataset["task_ids"], device=self.device)
-        labels = torch.tensor(train_dataset["label"], device=self.device)
+        labels = torch.tensor(train_dataset["label"], device=self.device).float()
         task_id_sort_perm = torch.argsort(task_ids)
         hiddens = hiddens[task_id_sort_perm]
         task_ids = task_ids[task_id_sort_perm]

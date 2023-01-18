@@ -179,6 +179,7 @@ class BertForMultiMonotonicTransformSequenceRegression(
 
         best_loss = float("inf")
         best_state_dict = None
+        print("Training task", task_id)
         for itr in range(0, 10):
 
             def loss_closure():
@@ -189,6 +190,7 @@ class BertForMultiMonotonicTransformSequenceRegression(
                 return loss_val
 
             loss = opt.step(loss_closure)
+            print("itr", itr, "loss", loss, "best_loss", best_loss)
             if math.isnan(loss):
                 break
             if loss < best_loss:

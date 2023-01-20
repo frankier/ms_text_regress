@@ -298,6 +298,9 @@ def normalize_reviews(review_df):
     working_review_df = drop_because(
         working_review_df, working_review_df["multiplier"] > 500, "multiplier > 500"
     )
+    working_review_df = drop_because(
+        working_review_df, working_review_df["scale_points"] > 255, "scale_points > 255"
+    )
     assert working_review_df["non_neg_error"].sum() == 0
 
     # More summary stats

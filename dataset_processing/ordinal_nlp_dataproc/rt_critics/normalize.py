@@ -49,6 +49,16 @@ def is_dec_denom(s):
     return len(bits) == 2 and "." in bits[1]
 
 
+def is_gt1_frac(s):
+    bits = s.split("/")
+    try:
+        n = float(bits[0])
+        d = float(bits[1])
+    except ValueError:
+        return False
+    return n > d
+
+
 def drop_because(df, pred, reason):
     print(f"Dropping {pred.sum()} ({pred.mean() * 100:.2f}%) of reviews with {reason}")
     return df[~pred]
@@ -67,7 +77,9 @@ def drop_odd_grade_types(df):
     assert len(df[~is_frac & ~is_any_letter & ~is_barenum]) == 0
     df = drop_because(df, is_barenum, "bare number rating (i.e. no denominator)")
     is_frac_denom = df["review_score"].map(is_dec_denom)
-    return drop_because(df, is_frac_denom, "fractional denominator")
+    df = drop_because(df, is_frac_denom, "fractional denominator")
+    is_gt1 = df["review_score"].map(is_gt1_frac)
+    return drop_because(df, is_gt1, "numerator > denominator")
 
 
 def split_scores(df):

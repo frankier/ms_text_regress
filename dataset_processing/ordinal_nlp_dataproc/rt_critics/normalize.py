@@ -176,10 +176,45 @@ def common_denom_grades(group_df):
     return group_df
 
 
+def normalize_review_text(text):
+    import re
+
+    text = text.replace(r"\'", "'")
+    return re.sub(
+        r"%u([a-fA-F0-9]{4}|[a-fA-F0-9]{2})", lambda m: chr(int(m.group(1), 16)), text
+    )
+
+
+def is_non_english(s):
+    from ftlangdetect import detect
+
+    return len(s) >= 40 and detect(s)["lang"] != "en"
+
+
 def normalize_reviews(review_df):
     print()
     # Drop unrated
     review_df = drop_unrated(review_df)
+
+    # Drop complete duplicates
+    review_df.drop_duplicates(
+        [
+            "critic_name",
+            "publisher_name",
+            "review_content",
+            "review_score",
+            "rotten_tomatoes_link",
+        ],
+        inplace=True,
+    )
+
+    # Normalize review text
+    review_df["review_content"] = review_df["review_content"].map(normalize_review_text)
+
+    # Filter out non-English
+    review_df = drop_because(
+        review_df, review_df["review_content"].map(is_non_english), "non-English review"
+    )
 
     # Strip whitespace from grades
     review_df["review_score"] = review_df["review_score"].str.replace(

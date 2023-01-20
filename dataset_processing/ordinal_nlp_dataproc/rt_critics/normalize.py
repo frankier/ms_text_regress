@@ -64,9 +64,27 @@ def drop_because(df, pred, reason):
     return df[~pred]
 
 
+def is_click_here(s):
+    return s.str.match(
+        r"(click (to |for |here)|full review (in|at) |\(no quote available.\)|see website |podcast review|to read review).*",
+        case=False,
+    )
+
+
+def is_grade(s):
+    norm_s = s.strip().upper()
+    return norm_s in LONG_LETTER_SCALE or is_frac_str(norm_s) or is_floatable(norm_s)
+
+
 def drop_unrated(df):
     df = drop_because(df, df["review_score"].isna(), "no rating")
     df = drop_because(df, df["review_content"].isna(), "missing review")
+    df = drop_because(df, is_click_here(df["review_content"]), "review is 'click here'")
+    df = drop_because(df, df["review_content"].map(is_grade), "review is grade")
+    df = drop_because(
+        df, df["review_content"].str.len() == 1, "single character review"
+    )
+
     return df
 
 

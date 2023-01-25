@@ -83,9 +83,14 @@ class NormalizeHiddenMixin:
     def init_std_hidden_pilot(self, train_dataset, tokenizer, sample_size, batch_size):
         hiddens = torch.vstack(
             [
-                out.hidden_linear
+                out[1].hidden_linear
                 for out in inference_run(
-                    self, tokenizer, train_dataset, batch_size, sample_size
+                    self,
+                    tokenizer,
+                    train_dataset,
+                    batch_size,
+                    sample_size,
+                    eval_mode=True,
                 )
             ]
         )

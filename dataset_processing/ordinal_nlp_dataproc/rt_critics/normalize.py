@@ -26,6 +26,40 @@ LONG_LETTER_SCALE = [
     "A+",
 ]
 
+# These reviews have odd grades which throw off the normalization resulting in a
+# large number of scale points. We just remove them manually.
+# rotten_tomatoes_link, publisher_name, critic_name, review_score
+BLACKLIST = [
+    (
+        "m/the_humbling",
+        "Spirituality & Practice",
+        "Frederic and Mary Ann Brussat",
+        "2.7/5",
+    ),
+    ("m/the_number_23", "ComingSoon.net", "Edward Douglas", "2.3/10"),  # Clearly a joke
+    ("m/the_dark_knight_rises", "3AW", "Jim Schembri", "4.4/5"),
+    (
+        "m/sherlock_holmes_2009",
+        "Northwest Herald (Crystal Lake, IL)",
+        "Jeffrey Westhoff",
+        "2.4/4",
+    ),
+    (
+        "m/chloe_in_the_afternoon",
+        "Combustible Celluloid",
+        "Jeffrey M. Anderson",
+        "3.4/4",
+    ),
+    (
+        "m/heaven_is_for_real",
+        "Commercial Appeal (Memphis, TN)",
+        "John Beifuss",
+        "2.4/4",
+    ),
+    ("m/undefeated_2012", "MovieFreak.com", "Sara Michelle Fetters", "3.4/4"),
+    ("m/nebraska", "Herald Sun (Australia)", "Leigh Paatsch", "4.4/5"),
+]
+
 
 def is_floatable(f):
     try:
@@ -207,6 +241,21 @@ def normalize_reviews(review_df):
         ],
         inplace=True,
     )
+
+    blacklist_bool = numpy.zeros(review_df.shape[0], dtype=bool)
+    for rotten_tomatoes_link, publisher_name, critic_name, review_score in BLACKLIST:
+        matches = (
+            (review_df["rotten_tomatoes_link"] == rotten_tomatoes_link)
+            & (review_df["publisher_name"] == publisher_name)
+            & (review_df["critic_name"] == critic_name)
+            & (review_df["review_score"] == review_score)
+        )
+        if not any(matches):
+            print(
+                f"Blacklist entry not found: {rotten_tomatoes_link}, {publisher_name}, {critic_name}, {review_score}"
+            )
+        blacklist_bool |= matches
+    review_df = drop_because(review_df, blacklist_bool, "blacklisted items")
 
     # Normalize review text
     review_df["review_content"] = review_df["review_content"].map(normalize_review_text)

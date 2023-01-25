@@ -223,15 +223,25 @@ def sample_multiscale_rt_critics(batch):
     return pyarrow.Table.from_pandas(df)
 
 
-def sample_rt_critics_by_critic_500pl(batch):
-    df = pandas.DataFrame.from_dict(batch.data)
+def sample_rt_critics_by_critic_min(df, min_reviews=500):
     df["orig_group_id"] = df["group_id"]
     # Drop groups with no critic_name given
     df = df[df["critic_name"].notna()]
-    groups = df.groupby(["critic_name", "group_id"])
+    # Filter out critic names that are not natural names (e.g. E! staff)
+    df = df[~df["critic_name"].str.lower().str.endswith("staff")]
+    groups = df.groupby("critic_name")
+
+    # Keep only biggest group from each critic
+    def transform_group(grp):
+        return grp[grp["group_id"] == grp.groupby("group_id").size().idxmax()]
+
+    df = groups.apply(transform_group)
+    groups = df.groupby(level="critic_name")
     df["group_id"] = groups.ngroup().astype(int)
-    df = groups.filter(lambda x: len(x) >= 500)
-    return pyarrow.Table.from_pandas(df.sample(frac=1, random_state=42))
+    df = groups.filter(lambda x: len(x) >= min_reviews)
+    df = renumber_groups(df, "group_id")
+    df = df.reset_index(drop=True)
+    return df.sample(frac=1, random_state=42)
 
 
 def load_joined_rt_critics() -> datasets.Dataset:
@@ -240,6 +250,27 @@ def load_joined_rt_critics() -> datasets.Dataset:
     d = datasets.concatenate_datasets(list(d.values()))
     assert isinstance(d, datasets.Dataset)
     return d
+
+
+def critics_by_critics_ds(min_reviews=500):
+    d = load_joined_rt_critics()
+    df = sample_rt_critics_by_critic_min(d.to_pandas(), min_reviews=min_reviews)
+    train_df, test_df = stratified_split(df, ["group_id"], random_state=42)
+    dataset = datasets.DatasetDict(
+        {
+            "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
+            "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
+        }
+    )
+    dataset = dataset.rename_columns(
+        {
+            "group_id": "task_ids",
+            "review_content": "text",
+        }
+    )
+    num_labels = get_dataset_scale_points_rt(dataset)
+    is_multi = True
+    return dataset, num_labels, is_multi
 
 
 def load_data(
@@ -290,24 +321,9 @@ def load_data(
         dataset = dataset.rename_columns({"review_content": "text"})
         is_multi = False
     elif name == "rt_critics_by_critic_500pl":
-        d = load_joined_rt_critics()
-        d = d.map(sample_rt_critics_by_critic_500pl, batched=True, batch_size=None)
-        df = pandas.DataFrame(d)
-        train_df, test_df = stratified_split(df, ["group_id"], random_state=42)
-        dataset = datasets.DatasetDict(
-            {
-                "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
-                "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
-            }
-        )
-        dataset = dataset.rename_columns(
-            {
-                "group_id": "task_ids",
-                "review_content": "text",
-            }
-        )
-        num_labels = get_dataset_scale_points_rt(dataset)
-        is_multi = True
+        return critics_by_critics_ds(500)
+    elif name == "rt_critics_by_critic_1000pl":
+        return critics_by_critics_ds(1000)
     elif name == "rt_critics_big_irregular_5":
         d = load_joined_rt_critics()
         df = pandas.DataFrame(d)

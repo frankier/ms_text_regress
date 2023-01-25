@@ -118,6 +118,20 @@ def dump_task_monotonic_funcs(model, monotonic_funcs):
         pickle.dump(task_outs, f)
 
 
+def dump_task_affines(model, task_affines):
+    task_outs = []
+    for task_id, num_labels in enumerate(model.num_labels):
+        task_outs.append(
+            {
+                "weight": model.scales[task_id].weight.item(),
+                "bias": model.scales[task_id].bias.item(),
+                "num_labels": num_labels,
+            }
+        )
+    with open(task_affines, "wb") as f:
+        pickle.dump(task_outs, f)
+
+
 class DumpWriter:
     def __init__(self, out_base, zip_with=None, segments=("train", "test")):
         self.out_base = out_base
@@ -148,6 +162,9 @@ class DumpWriter:
         os.makedirs(pjoin(self.out_base, path), exist_ok=True)
 
     def finish_step_dump(self, model):
+        from bert_ordinal.baseline_models.regression import (
+            BertForMultiScaleSequenceRegression,
+        )
         from bert_ordinal.experimental_regression import (
             BertForMultiMonotonicTransformSequenceRegression,
         )
@@ -166,6 +183,8 @@ class DumpWriter:
             full_thresholds_path = pjoin(self.out_base, thresholds_path)
             if isinstance(model, BertForMultiScaleOrdinalRegression):
                 dump_task_thresholds(model, full_thresholds_path)
+            elif isinstance(model, BertForMultiScaleSequenceRegression):
+                dump_task_affines(model, full_thresholds_path)
             else:
                 dump_task_monotonic_funcs(model, full_thresholds_path)
 

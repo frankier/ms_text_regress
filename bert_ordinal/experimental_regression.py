@@ -184,7 +184,7 @@ class BertForMultiMonotonicTransformSequenceRegression(
 
         best_loss = float("inf")
         best_state_dict = None
-        print("Training task", task_id)
+        print("Pretraining scale for task", task_id, "on device", self.device)
         for itr in range(0, 10):
 
             def loss_closure():

@@ -116,7 +116,7 @@ NORMAL_FEATURES = datasets.Features(
 class MultiscaleRTCritics(datasets.GeneratorBasedBuilder):
     _DESCRIPTION
 
-    VERSION = datasets.Version("1.0.4")
+    VERSION = datasets.Version("1.0.5")
 
     def _info(self):
         return datasets.DatasetInfo(

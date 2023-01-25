@@ -271,3 +271,21 @@ def refit_eval(
         for k, v in family_eval.items():
             res[f"refit/{family_name}/{k}"] = v
     return res
+
+
+def add_bests(metrics):
+    best_ms_mae = float("inf")
+    best_acc = float("inf")
+    best_tavg_qwk = float("inf")
+    for k, v in metrics.items():
+        bits = k.split("/")
+        if bits[-1] == "ms_mae":
+            best_ms_mae = min(best_ms_mae, v)
+        elif bits[-1] == "acc":
+            best_acc = max(best_acc, v)
+        elif len(bits) >= 2 and bits[-2:] == ["tavg", "qwk"]:
+            best_tavg_qwk = max(best_tavg_qwk, v)
+    metrics["best/ms_mae"] = best_ms_mae
+    metrics["best/acc"] = best_acc
+    metrics["best/tavg/qwk"] = best_tavg_qwk
+    return metrics

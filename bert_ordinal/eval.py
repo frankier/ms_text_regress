@@ -2,14 +2,15 @@
 This module implements evaluation metrics for ordinal regression tasks including
 those with multiple scales.
 """
+import sys
 from functools import cache
+
+import numpy as np
 
 try:
     import numba
 except ModuleNotFoundError as err:
     raise RuntimeError("bert_ordinal.eval requires numba") from err
-
-import numpy as np
 
 
 @numba.njit
@@ -215,29 +216,193 @@ def evaluate_pred_dist_avgs(pred_dist_avgs, labels, num_labels, task_ids=None):
     return res
 
 
+def generate_refits(regressors, scale_points_map, vglm_kwargs):
+    from joblib import delayed
+
+    from bert_ordinal.baseline_models.skl_wrap import fit
+    from bert_ordinal.ordinal_models.vglm import fit_one_task
+
+    def tagdelay(name, f, *args, **kwargs):
+        return delayed(lambda *args, **kwargs: (name, f(*args, **kwargs)))(
+            *args, **kwargs
+        )
+
+    for task_id, coefs in regressors.items():
+        yield tagdelay(
+            "cumulative",
+            fit_one_task,
+            task_id,
+            coefs,
+            scale_points_map[task_id],
+            "cumulative",
+            **vglm_kwargs,
+        )
+    for task_id, coefs in regressors.items():
+        yield tagdelay(
+            "acat",
+            fit_one_task,
+            task_id,
+            coefs,
+            scale_points_map[task_id],
+            "acat",
+            **vglm_kwargs,
+        )
+    for task_id, coefs in regressors.items():
+        yield tagdelay("linear", fit, task_id, coefs)
+
+
+def ensure_pool(num_workers=0, pool=None):
+    from joblib import Parallel
+
+    if num_workers == 0:
+        num_workers = 1
+    if pool is None:
+        return Parallel(num_workers, timeout=30)
+    return pool
+
+
+def dump_and_eval_refit_linear(
+    coefs,
+    task_ids,
+    train_hiddens,
+    test_hiddens,
+    test_labels,
+    batch_num_labels,
+    dump_writer=None,
+):
+    from bert_ordinal.baseline_models.skl_wrap import predict
+
+    to_pred = [("test", test_hiddens)]
+    if dump_writer is not None:
+        to_pred.append(("train", train_hiddens))
+    test_preds = None
+    for name, hiddens in to_pred:
+        preds = predict(
+            coefs,
+            task_ids,
+            hiddens,
+            batch_num_labels,
+        )
+
+        if dump_writer is not None:
+            dump_writer.add_info_full(
+                name,
+                **{"pred/refit/linear": preds},
+            )
+        if name == "test":
+            test_preds = preds
+    return evaluate_predictions(test_preds, test_labels, batch_num_labels, task_ids)
+
+
+def dump_and_eval_refit_ord(
+    family_name,
+    coefs,
+    task_ids,
+    train_hiddens,
+    test_hiddens,
+    test_labels,
+    batch_num_labels,
+    dump_writer=None,
+):
+    from bert_ordinal.label_dist import summarize_label_dists
+    from bert_ordinal.ordinal_models.vglm import label_dists_from_coefs
+
+    to_pred = [("test", test_hiddens)]
+    if dump_writer is not None:
+        to_pred.append(("train", train_hiddens))
+    test_summarized_label_dists = None
+    for name, hiddens in to_pred:
+        label_dists = label_dists_from_coefs(
+            family_name,
+            coefs,
+            task_ids,
+            hiddens,
+            batch_num_labels,
+        )
+        summarized_label_dists = summarize_label_dists(label_dists)
+        if dump_writer is not None:
+            dump_writer.add_info_full(
+                name,
+                **{
+                    f"pred/refit/{family_name}/{avg}": v.cpu().numpy()
+                    for avg, v in summarized_label_dists.items()
+                },
+            )
+        if name == "test":
+            test_summarized_label_dists = summarized_label_dists
+    return evaluate_pred_dist_avgs(
+        test_summarized_label_dists, test_labels, batch_num_labels, task_ids
+    )
+
+
+def dump_and_eval_refit(
+    family_name,
+    coefs,
+    task_ids,
+    train_hiddens,
+    test_hiddens,
+    test_labels,
+    batch_num_labels,
+    dump_writer=None,
+):
+    if family_name == "linear":
+        # label_dists_from_coefs, lr_one_skl
+        return dump_and_eval_refit_linear(
+            coefs,
+            task_ids,
+            train_hiddens,
+            test_hiddens,
+            test_labels,
+            batch_num_labels,
+            dump_writer=dump_writer,
+        )
+    else:
+        return dump_and_eval_refit_ord(
+            family_name,
+            coefs,
+            task_ids,
+            train_hiddens,
+            test_hiddens,
+            test_labels,
+            batch_num_labels,
+            dump_writer=dump_writer,
+        )
+
+
+def dump_refit_heads(family_name, model, coefs, dump_writer=None):
+    if dump_writer is None:
+        return
+    dump_writer.add_heads("refit/" + family_name, model, coefs)
+
+
 def refit_eval(
     model,
     tokenizer,
     train_dataset,
     batch_size,
     task_ids,
+    scale_points_map,
+    train_hiddens_buffer,
     test_hiddens,
     batch_num_labels,
-    labels,
+    test_labels,
+    regressor_buffers,
     dump_writer=None,
     dump_callback=None,
     num_workers=0,
     pool=None,
-    **kwargs,
+    vglm_kwargs=None,
 ):
-    from bert_ordinal.label_dist import summarize_label_dists
-    from bert_ordinal.ordinal_models.vglm import (
-        label_dists_from_hiddens,
-        prepare_regressors,
-    )
+    if vglm_kwargs is None:
+        vglm_kwargs = {}
+    from tqdm.auto import tqdm
+
+    from bert_ordinal.ordinal_models.vglm import prepare_regressors
 
     res = {}
-    regressors = prepare_regressors(
+    train_hiddens, regressors = prepare_regressors(
+        train_hiddens_buffer,
+        regressor_buffers,
         model,
         tokenizer,
         train_dataset,
@@ -245,30 +410,37 @@ def refit_eval(
         dump_writer=dump_writer,
         dump_callback=dump_callback,
     )
-    for family_name in ["cumulative", "acat"]:
-        label_dists = label_dists_from_hiddens(
+    pool = ensure_pool(num_workers, pool)
+    all_coefs = {}
+    total = len(regressors) * 3
+    count = 0
+    bar = tqdm(total=total)
+    try:
+        for typ, payload in pool(
+            generate_refits(regressors, scale_points_map, vglm_kwargs)
+        ):
+            bar.update(1)
+            count += 1
+            task_id, coefs = payload
+            all_coefs.setdefault(typ, {})[task_id] = coefs
+    except TimeoutError:
+        print(
+            f"WARNING: Timed out during refits with {count}/{total} tasks successful",
+            file=sys.stderr,
+        )
+
+    for family_name, coefs in all_coefs.items():
+        dump_refit_heads(family_name, model, coefs, dump_writer=dump_writer)
+        eval = dump_and_eval_refit(
             family_name,
-            regressors,
+            coefs,
             task_ids,
+            train_hiddens,
             test_hiddens,
+            test_labels,
             batch_num_labels,
-            num_workers=num_workers,
-            pool=pool,
-            **kwargs,
         )
-        summarized_label_dists = summarize_label_dists(label_dists)
-        if dump_writer is not None:
-            dump_writer.add_info_full(
-                "test",
-                **{
-                    f"pred/refit/{family_name}/{avg}": v.cpu().numpy()
-                    for avg, v in summarized_label_dists.items()
-                },
-            )
-        family_eval = evaluate_pred_dist_avgs(
-            summarized_label_dists, labels, batch_num_labels, task_ids
-        )
-        for k, v in family_eval.items():
+        for k, v in eval.items():
             res[f"refit/{family_name}/{k}"] = v
     return res
 

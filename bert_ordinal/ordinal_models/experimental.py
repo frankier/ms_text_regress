@@ -8,13 +8,13 @@ from transformers.models.bert.modeling_bert import (
     BertPreTrainedModel,
     SequenceClassifierOutput,
 )
-from transformers.trainer import Trainer
 
 from bert_ordinal.initialisation import iter_task_normal_cutoffs
 from bert_ordinal.transformers_utils import (
     BertMultiLabelsConfig,
     LatentRegressionOutput,
     NormalizeHiddenMixin,
+    Trainer,
 )
 
 

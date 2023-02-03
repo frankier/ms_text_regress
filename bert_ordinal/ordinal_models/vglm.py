@@ -1,7 +1,6 @@
 import threading
 
 import numpy as np
-from tqdm.auto import tqdm
 
 local = threading.local()
 
@@ -70,24 +69,20 @@ def fill_missing_coefs(coefs, labels, num_labels=None):
         inv[x] = i
     coefs_full = np.empty((2, num_labels - 1), dtype=np.float)
     intercept_range = coefs[0, -1] - coefs[0, 0]
+    prev_src_idx = None
     for dest_idx, src_idx in enumerate(inv):
         if src_idx == -1:
-            if dest_idx == 0:
+            if dest_idx < represented_indices[0]:
                 coefs_full[0, 0] = coefs[0, 0] - intercept_range
                 coefs_full[1, 0] = coefs[1, 0]
+            elif dest_idx > represented_indices[-1]:
+                coefs_full[0, dest_idx] = coefs[0, -1] + intercept_range
+                coefs_full[1, dest_idx] = coefs[1, -1]
             else:
-                cand_src_idx_idx = dest_idx
-                while 1:
-                    cand_src_idx_idx += 1
-                    if cand_src_idx_idx >= num_labels - 1:
-                        coefs_full[0, dest_idx] = coefs[0, -1] + intercept_range
-                        coefs_full[1, dest_idx] = coefs[1, -1]
-                        break
-                    elif inv[cand_src_idx_idx] != -1:
-                        coefs_full[:, dest_idx] = coefs[:, inv[cand_src_idx_idx]]
-                        break
+                coefs_full[:, dest_idx] = coefs[:, inv[prev_src_idx]]
         else:
             coefs_full[:, dest_idx] = coefs[:, src_idx]
+            prev_src_idx = src_idx
     return coefs_full
 
 
@@ -124,11 +119,19 @@ def plus_one_smoothing(df, x_var, y_var, num_labels):
 
 
 def prepare_regressors(
-    model, tokenizer, train_dataset, batch_size, dump_writer=None, dump_callback=None
+    train_hiddens_buffer,
+    regressor_buffers,
+    model,
+    tokenizer,
+    train_dataset,
+    batch_size,
+    dump_writer=None,
+    dump_callback=None,
 ):
     from bert_ordinal.transformers_utils import inference_run
 
-    regressors = {}
+    pos = 0
+    positions = {task_id: 0 for task_id in regressor_buffers}
     for batch, result in inference_run(
         model,
         tokenizer,
@@ -139,11 +142,12 @@ def prepare_regressors(
         pass_task_ids=dump_callback is not None,
     ):
         if dump_writer is not None:
+            extra_kwargs = {}
             if dump_callback is not None:
                 extra_kwargs = dump_callback(batch, result)
             dump_writer.add_info_chunk(
                 "train",
-                hidden=result.hidden_linear.detach().cpu().numpy().squeeze(-1),
+                hidden=result.hidden_linear.detach().cpu().numpy(),
                 **extra_kwargs,
             )
         batch_info = zip(
@@ -153,95 +157,59 @@ def prepare_regressors(
             result.hidden_linear,
         )
         for task_id, label, scale_points, hidden_linear in batch_info:
-            xs, ys, _ = regressors.setdefault(
-                task_id.item(), ([], [], scale_points.item())
-            )
-            xs.append(hidden_linear.item())
-            ys.append(label.item())
-    return regressors
+            task_id = task_id.item()
+            label = label.item()
+            hidden_linear = hidden_linear.item()
+            xs, ys = regressor_buffers[task_id]
+            train_hiddens_buffer[pos] = hidden_linear
+            xs[positions[task_id]] = hidden_linear
+            ys[positions[task_id]] = label
+            positions[task_id] += 1
+            pos += 1
+    return train_hiddens_buffer, regressor_buffers
 
 
-def fit_one_task(item, family_name, mask_vglm_errors=False, **kwargs):
+def fit_one_task(
+    task_id, coefs, scale_points, family_name, mask_vglm_errors=False, **kwargs
+):
     from pandas import DataFrame
     from rpy2.rinterface_lib.embedded import RRuntimeError
 
-    task_id, (xs, ys, scale_points) = item
+    xs, ys = coefs
     df = DataFrame({"xs": xs, "ys": ys})
     try:
         coefs = vglm(df, "xs", "ys", family_name, scale_points, **kwargs)
     except RRuntimeError:
-        # if not mask_vglm_errors:
-        # raise
+        if not mask_vglm_errors:
+            raise
         return task_id, None
     else:
         return task_id, coefs
 
 
-def imap_unordered(callback, iterable, num_workers=0, pool=None):
-    from torch.multiprocessing import Pool
+def link_of_family_name(family_name):
+    from bert_ordinal.element_link import get_link_by_name
 
-    if num_workers == 0:
-        for item in iterable:
-            yield callback(item)
-    else:
-        if pool is None:
-            pool = Pool(num_workers)
-            with pool as p:
-                for item in p.imap_unordered(callback, iterable):
-                    yield item
-        else:
-            for item in pool.imap_unordered(callback, iterable):
-                yield item
+    return get_link_by_name("fwd_" + family_name)
 
 
-def refit(
-    family_name, regressors, num_workers=0, pool=None, mask_vglm_errors=False, **kwargs
-):
-    from functools import partial
-
-    all_coefs = {}
-
-    fit_one_task_partial = partial(
-        fit_one_task,
-        family_name=family_name,
-        mask_vglm_errors=mask_vglm_errors,
-        **kwargs,
-    )
-    bar = tqdm(total=len(regressors))
-    for task_id, coefs in imap_unordered(
-        fit_one_task_partial, regressors.items(), num_workers=num_workers, pool=pool
-    ):
-        all_coefs[task_id] = coefs
-        bar.update(1)
-
-    return all_coefs
-
-
-def label_dists_from_hiddens(
+def label_dists_from_coefs(
     family_name,
-    regressors,
+    coefs,
     task_ids,
-    test_hiddens,
+    hiddens,
     batch_num_labels,
-    num_workers=0,
-    pool=None,
-    **kwargs,
 ):
     import torch
 
-    from bert_ordinal.element_link import get_link_by_name
-
-    link = get_link_by_name("fwd_" + family_name)
-    coefs = refit(family_name, regressors, num_workers, pool, **kwargs)
+    link = link_of_family_name(family_name)
     label_dists = []
-    for task_id, test_hidden, nl in zip(
-        task_ids, test_hiddens, batch_num_labels, strict=True
-    ):
+    for task_id, hidden, nl in zip(task_ids, hiddens, batch_num_labels, strict=True):
         if coefs.get(task_id) is None:
             label_dists.append(torch.ones((nl,)) / nl)
         else:
             intercepts = coefs[task_id][0, :]
             coef = coefs[task_id][1, :]
-            logits = test_hidden.squeeze() * coef + intercepts
+            logits = hidden.squeeze() * coef + intercepts
             label_dists.append(link.label_dist_from_logits(torch.tensor(logits)))
     return label_dists

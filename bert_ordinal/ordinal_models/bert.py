@@ -10,7 +10,6 @@ import packaging.version
 import torch
 import torch.utils.checkpoint
 from torch import nn
-from transformers import Trainer as OriginalHFTrainer
 from transformers.models.bert.modeling_bert import (
     BERT_INPUTS_DOCSTRING,
     BERT_START_DOCSTRING,
@@ -144,17 +143,6 @@ class BertForOrdinalRegression(BertPreTrainedModel):
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
         )
-
-
-class NestedTensorTrainerMixin:
-    def _pad_across_processes(self, tensor, *args, **kwargs):
-        if getattr(tensor, "is_nested", False):
-            return tensor
-        return super()._pad_across_processes(tensor, *args, **kwargs)
-
-
-class Trainer(NestedTensorTrainerMixin, OriginalHFTrainer):
-    pass
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):

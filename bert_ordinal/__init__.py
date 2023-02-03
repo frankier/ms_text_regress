@@ -5,7 +5,8 @@ from bert_ordinal.ordinal import (
     ordinal_decode_labels_pt,
     ordinal_encode_labels,
 )
-from bert_ordinal.ordinal_models.bert import BertForOrdinalRegression, Trainer
+from bert_ordinal.ordinal_models.bert import BertForOrdinalRegression
+from bert_ordinal.transformers_utils import Trainer
 
 __all__ = [
     "ord",

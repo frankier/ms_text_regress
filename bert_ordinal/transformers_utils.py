@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
+from transformers import Trainer as OriginalHFTrainer
 from transformers.data.data_collator import DataCollatorWithPadding
 from transformers.models.bert.modeling_bert import BertConfig
 from transformers.utils import ModelOutput
@@ -39,6 +40,7 @@ def inference_run(
     eval_mode=False,
     use_tqdm=False,
     pass_task_ids=False,
+    **kwargs,
 ):
     if sample_size:
         train_dataset = train_dataset.shuffle(seed=42).select(range(sample_size))
@@ -60,9 +62,7 @@ def inference_run(
                 model.eval()
         for batch in dataloader:
             if pass_task_ids:
-                kwargs = {"task_ids": batch["task_ids"]}
-            else:
-                kwargs = {}
+                kwargs["task_ids"] = batch["task_ids"]
             result = model.forward(
                 input_ids=batch["input_ids"].to(model.device, non_blocking=True),
                 attention_mask=batch["attention_mask"].to(
@@ -206,3 +206,14 @@ def silence_warnings():
     logging.set_verbosity_error()
     yield
     logging.set_verbosity_warning()
+
+
+class NestedTensorTrainerMixin:
+    def _pad_across_processes(self, tensor, *args, **kwargs):
+        if getattr(tensor, "is_nested", False):
+            return tensor
+        return super()._pad_across_processes(tensor, *args, **kwargs)
+
+
+class Trainer(NestedTensorTrainerMixin, OriginalHFTrainer):
+    pass

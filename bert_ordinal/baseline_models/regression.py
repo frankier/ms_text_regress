@@ -19,6 +19,7 @@ from transformers.utils import (
 from bert_ordinal.transformers_utils import (
     BertMultiLabelsMixin,
     LatentRegressionOutput,
+    LossScalersMixin,
     NormalizeHiddenMixin,
     group_labels,
 )
@@ -31,13 +32,38 @@ class BertForMultiScaleSequenceRegressionConfig(BertMultiLabelsMixin, BertConfig
         self.loss = loss
 
 
+class RegressionLossMixin(LossScalersMixin):
+    def __init__(self, config):
+        super().__init__(config)
+        if config.loss == "mse":
+            self.loss_fct = nn.MSELoss(reduction="none")
+        elif config.loss == "mae":
+            self.loss_fct = nn.L1Loss(reduction="none")
+        elif config.loss == "adjust_l1":
+            from bert_ordinal.vendor.adjust_smooth_l1_loss import AdjustSmoothL1Loss
+
+            self.loss_fct = AdjustSmoothL1Loss(
+                num_features=1, beta=1.0, reduction="none"
+            )
+        else:
+            raise ValueError(f"Unknown loss {config.loss}")
+
+    def compute_loss(self, scaled_outputs, task_ids, labels):
+        return (
+            self.loss_fct(scaled_outputs, labels.unsqueeze(-1).float())
+            / self.loss_scalers[task_ids]
+        ).mean()
+
+
 @add_start_docstrings(
     """
     Bert Model transformer with a per-task/scale regression.
     """,
     BERT_START_DOCSTRING,
 )
-class BertForMultiScaleSequenceRegression(BertPreTrainedModel, NormalizeHiddenMixin):
+class BertForMultiScaleSequenceRegression(
+    RegressionLossMixin, BertPreTrainedModel, NormalizeHiddenMixin
+):
     config_class = BertForMultiScaleSequenceRegressionConfig
 
     def __init__(self, config):
@@ -55,16 +81,6 @@ class BertForMultiScaleSequenceRegression(BertPreTrainedModel, NormalizeHiddenMi
         self.dropout = nn.Dropout(classifier_dropout)
         self.classifier = nn.Linear(config.hidden_size, 1)
         self.scales = torch.nn.ModuleList([nn.Linear(1, 1) for nl in config.num_labels])
-        if config.loss == "mse":
-            self.loss_fct = nn.MSELoss()
-        elif config.loss == "mae":
-            self.loss_fct = nn.L1Loss()
-        elif config.loss == "adjust_l1":
-            from bert_ordinal.vendor.adjust_smooth_l1_loss import AdjustSmoothL1Loss
-
-            self.loss_fct = AdjustSmoothL1Loss(num_features=1, beta=1.0)
-        else:
-            raise ValueError(f"Unknown loss {config.loss}")
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -129,7 +145,7 @@ class BertForMultiScaleSequenceRegression(BertPreTrainedModel, NormalizeHiddenMi
                     "task_ids must be provided if labels are provided"
                     " -- cannot calculate loss without a task"
                 )
-            loss = self.loss_fct(scaled_outputs, labels.unsqueeze(-1).float())
+            loss = self.compute_loss(scaled_outputs, task_ids, labels)
         if not return_dict:
             output = (
                 hidden_linear,

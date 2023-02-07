@@ -103,6 +103,37 @@ class NormalizeHiddenMixin:
         self.classifier.weight.data /= std
 
 
+class LossScalersMixin:
+    def __init__(self, config):
+        super().__init__(config)
+        self.register_buffer("loss_scalers", torch.ones(len(config.num_labels)))
+        self.loss_scalers: torch.Tensor
+
+    def init_loss_scaling(self, train_dataset, min_samples_per_group=20):
+        task_ids = np.asarray(train_dataset["task_ids"])
+        labels = np.asarray(train_dataset["label"])
+        scale_points = np.asarray(train_dataset["scale_points"])
+        self._init_loss_scaling(task_ids, labels, scale_points, min_samples_per_group)
+
+    def _init_loss_scaling(
+        self,
+        task_ids: np.array,
+        labels: np.array,
+        scale_points: np.array,
+        min_samples_per_group,
+    ):
+        grouped_task_ids, groups = group_labels(task_ids, labels)
+        for task_id, group, group_scale_points in zip(
+            grouped_task_ids, groups, scale_points
+        ):
+            if len(group) < min_samples_per_group:
+                # Use std. dev of uniform distribution when we don't have enough samples
+                stddev = ((group_scale_points**2 - 1) / 12) ** 0.5
+            else:
+                stddev = np.std(group)
+            self.loss_scalers[task_id] = stddev
+
+
 def group_labels(task_ids: np.array, labels: np.array):
     sort_idxs = task_ids.argsort()
     task_ids = task_ids[sort_idxs]

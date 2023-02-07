@@ -13,6 +13,7 @@ from zuko.nn import MonotonicMLP
 
 from bert_ordinal.baseline_models.regression import (
     BertForMultiScaleSequenceRegressionConfig,
+    RegressionLossMixin,
 )
 from bert_ordinal.transformers_utils import (
     LatentRegressionOutput,
@@ -23,7 +24,7 @@ from bert_ordinal.transformers_utils import (
 
 
 class BertForMultiMonotonicTransformSequenceRegression(
-    BertPreTrainedModel, NormalizeHiddenMixin
+    RegressionLossMixin, BertPreTrainedModel, NormalizeHiddenMixin
 ):
     config_class = BertForMultiScaleSequenceRegressionConfig
 
@@ -45,17 +46,6 @@ class BertForMultiMonotonicTransformSequenceRegression(
         self.scales = torch.nn.ModuleList(
             [MonotonicMLP(1, 1, [50, 50]) for nl in config.num_labels]
         )
-        if config.loss == "mse":
-            self.loss_fct = nn.MSELoss()
-        elif config.loss == "mae":
-            self.loss_fct = nn.L1Loss()
-        elif config.loss == "adjust_l1":
-            from bert_ordinal.vendor.adjust_smooth_l1_loss import AdjustSmoothL1Loss
-
-            self.loss_fct = AdjustSmoothL1Loss(num_features=1, beta=1.0)
-        else:
-            raise ValueError(f"Unknown loss {config.loss}")
-
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -121,7 +111,7 @@ class BertForMultiMonotonicTransformSequenceRegression(
                     "task_ids must be provided if labels are provided"
                     " -- cannot calculate loss without a task"
                 )
-            loss = self.loss_fct(scaled_outputs, labels.unsqueeze(-1).float())
+            loss = self.compute_loss(scaled_outputs, task_ids, labels)
         if not return_dict:
             output = (
                 hidden_linear,

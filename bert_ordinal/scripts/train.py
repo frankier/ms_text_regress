@@ -325,6 +325,9 @@ class TrainerAndEvaluator:
         self.model, self.label_names, self.pred_proc, self.proc_logits = self.get_model(
             self.model_conf, self.args, self.num_labels
         )
+        if hasattr(self.model, "compile"):
+            print("Compiling model...")
+            self.model = torch.compile(self.model)
         self.eval_dataset = self.prepare_eval_dataset(
             self.args, self.dataset, self.label_names
         )

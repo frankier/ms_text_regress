@@ -54,11 +54,12 @@ def dump_task_thresholds(model, task_thresholds, link, coefs=None):
             return (
                 torch.vstack(
                     model.cutoffs(
-                        xs.unsqueeze(-1),
-                        torch.tensor(task_id).repeat(100),
+                        xs.to(device=model.device).unsqueeze(-1),
+                        torch.tensor(task_id, device=model.device).repeat(100),
                     ).unbind()
                 )
                 .sigmoid()
+                .cpu()
                 .numpy()
             )
 

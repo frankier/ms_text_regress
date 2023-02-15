@@ -147,7 +147,7 @@ def prepare_regressors(
                 extra_kwargs = dump_callback(batch, result)
             dump_writer.add_info_chunk(
                 "train",
-                hidden=result.hidden_linear.detach().cpu().numpy(),
+                hidden=result.hidden_linear.detach().cpu().numpy().squeeze(-1),
                 **extra_kwargs,
             )
         batch_info = zip(

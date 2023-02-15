@@ -61,6 +61,7 @@ class ExtraArguments:
     scale_lr_multiplier: Optional[float] = None
     use_bert_large_wholeword: bool = False
     no_loss_scale: bool = False
+    compile_model: bool = False
 
 
 def prepare_dataset_for_fast_inference(dataset, label_names, sort=False):
@@ -325,7 +326,7 @@ class TrainerAndEvaluator:
         self.model, self.label_names, self.pred_proc, self.proc_logits = self.get_model(
             self.model_conf, self.args, self.num_labels
         )
-        if hasattr(self.model, "compile"):
+        if self.args.compile_model:
             print("Compiling model...")
             self.model = torch.compile(self.model)
         self.eval_dataset = self.prepare_eval_dataset(

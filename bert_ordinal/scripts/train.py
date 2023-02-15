@@ -10,7 +10,6 @@ from typing import Optional
 import evaluate
 import numpy as np
 import torch
-from mt_ord_bert_utils import get_tokenizer
 from torch.optim.lr_scheduler import LambdaLR
 from transformers import HfArgumentParser, TrainingArguments
 from transformers.trainer_pt_utils import nested_numpify
@@ -26,6 +25,7 @@ from bert_ordinal.label_dist import (
     summarize_label_dist,
     summarize_label_dists,
 )
+from bert_ordinal.scripts.utils import get_tokenizer
 from bert_ordinal.transformers_utils import inference_run, silence_warnings
 
 metric_accuracy = evaluate.load("accuracy")

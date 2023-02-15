@@ -83,13 +83,20 @@ def prepare_dataset_for_fast_inference(dataset, label_names, sort=False):
 
 
 def init_weights(training_args, args, model_conf, model, tokenizer, dataset):
+    if args.pilot_sample_size > len(dataset["train"]):
+        print(
+            "Warning: pilot_sample_size > train set size, using train set size instead"
+        )
+        pilot_sample_size = len(dataset["train"])
+    else:
+        pilot_sample_size = args.pilot_sample_size
     if args.pilot_quantiles:
         # We wait until after Trainer is initialised to make sure the model is on the GPU
         if model_conf["is_ordinal"]:
             model.pilot_quantile_init(
                 dataset["train"],
                 tokenizer,
-                args.pilot_sample_size,
+                pilot_sample_size,
                 training_args.per_device_train_batch_size,
                 peak_class_prob=args.peak_class_prob,
             )
@@ -97,7 +104,7 @@ def init_weights(training_args, args, model_conf, model, tokenizer, dataset):
             model.pilot_quantile_init(
                 dataset["train"],
                 tokenizer,
-                args.pilot_sample_size,
+                pilot_sample_size,
                 training_args.per_device_train_batch_size,
             )
     if args.pilot_train_init:
@@ -110,7 +117,7 @@ def init_weights(training_args, args, model_conf, model, tokenizer, dataset):
         model.init_std_hidden_pilot(
             dataset["train"],
             tokenizer,
-            args.pilot_sample_size,
+            pilot_sample_size,
             training_args.per_device_train_batch_size,
         )
         model.set_ordinal_heads(torch.load(args.fitted_ordinal))

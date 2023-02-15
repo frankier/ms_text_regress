@@ -262,22 +262,18 @@ def ensure_pool(num_workers=0, pool=None):
     return pool
 
 
-def dump_and_eval_refit_linear(
+def pred_and_dump(
+    family_name,
+    split_name,
     coefs,
+    hiddens,
     task_ids,
-    train_hiddens,
-    test_hiddens,
-    test_labels,
     batch_num_labels,
     dump_writer=None,
 ):
-    from bert_ordinal.baseline_models.skl_wrap import predict
+    if family_name == "linear":
+        from bert_ordinal.baseline_models.skl_wrap import predict
 
-    to_pred = [("test", test_hiddens)]
-    if dump_writer is not None:
-        to_pred.append(("train", train_hiddens))
-    test_preds = None
-    for name, hiddens in to_pred:
         preds = predict(
             coefs,
             task_ids,
@@ -287,32 +283,14 @@ def dump_and_eval_refit_linear(
 
         if dump_writer is not None:
             dump_writer.add_info_full(
-                name,
+                split_name,
                 **{"pred/refit/linear": preds},
             )
-        if name == "test":
-            test_preds = preds
-    return evaluate_predictions(test_preds, test_labels, batch_num_labels, task_ids)
+        return preds
+    else:
+        from bert_ordinal.label_dist import summarize_label_dists
+        from bert_ordinal.ordinal_models.vglm import label_dists_from_coefs
 
-
-def dump_and_eval_refit_ord(
-    family_name,
-    coefs,
-    task_ids,
-    train_hiddens,
-    test_hiddens,
-    test_labels,
-    batch_num_labels,
-    dump_writer=None,
-):
-    from bert_ordinal.label_dist import summarize_label_dists
-    from bert_ordinal.ordinal_models.vglm import label_dists_from_coefs
-
-    to_pred = [("test", test_hiddens)]
-    if dump_writer is not None:
-        to_pred.append(("train", train_hiddens))
-    test_summarized_label_dists = None
-    for name, hiddens in to_pred:
         label_dists = label_dists_from_coefs(
             family_name,
             coefs,
@@ -323,51 +301,13 @@ def dump_and_eval_refit_ord(
         summarized_label_dists = summarize_label_dists(label_dists)
         if dump_writer is not None:
             dump_writer.add_info_full(
-                name,
+                split_name,
                 **{
                     f"pred/refit/{family_name}/{avg}": v.cpu().numpy()
                     for avg, v in summarized_label_dists.items()
                 },
             )
-        if name == "test":
-            test_summarized_label_dists = summarized_label_dists
-    return evaluate_pred_dist_avgs(
-        test_summarized_label_dists, test_labels, batch_num_labels, task_ids
-    )
-
-
-def dump_and_eval_refit(
-    family_name,
-    coefs,
-    task_ids,
-    train_hiddens,
-    test_hiddens,
-    test_labels,
-    batch_num_labels,
-    dump_writer=None,
-):
-    if family_name == "linear":
-        # label_dists_from_coefs, lr_one_skl
-        return dump_and_eval_refit_linear(
-            coefs,
-            task_ids,
-            train_hiddens,
-            test_hiddens,
-            test_labels,
-            batch_num_labels,
-            dump_writer=dump_writer,
-        )
-    else:
-        return dump_and_eval_refit_ord(
-            family_name,
-            coefs,
-            task_ids,
-            train_hiddens,
-            test_hiddens,
-            test_labels,
-            batch_num_labels,
-            dump_writer=dump_writer,
-        )
+        return summarized_label_dists
 
 
 def dump_refit_heads(family_name, model, coefs, dump_writer=None):
@@ -430,19 +370,36 @@ def refit_eval(
             file=sys.stderr,
         )
 
+    to_pred = [("test", test_hiddens, task_ids, batch_num_labels)]
+    if dump_writer is not None:
+        to_pred.append(
+            (
+                "train",
+                train_hiddens,
+                train_dataset["task_ids"],
+                train_dataset["scale_points"],
+            )
+        )
+
     for family_name, coefs in all_coefs.items():
         dump_refit_heads(family_name, model, coefs, dump_writer=dump_writer)
-        eval = dump_and_eval_refit(
-            family_name,
-            coefs,
-            task_ids,
-            train_hiddens,
-            test_hiddens,
-            test_labels,
-            batch_num_labels,
-        )
-        for k, v in eval.items():
-            res[f"refit/{family_name}/{k}"] = v
+        for split_name, hiddens, tids, nls in to_pred:
+            preds = pred_and_dump(
+                family_name,
+                split_name,
+                coefs,
+                hiddens,
+                tids,
+                nls,
+                dump_writer=dump_writer,
+            )
+            if split_name == "test":
+                if family_name == "linear":
+                    eval = evaluate_predictions(preds, test_labels, nls, tids)
+                else:
+                    eval = evaluate_pred_dist_avgs(preds, test_labels, nls, tids)
+                for k, v in eval.items():
+                    res[f"refit/{family_name}/{k}"] = v
     return res
 
 

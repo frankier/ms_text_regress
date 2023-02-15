@@ -4,6 +4,7 @@ those with multiple scales.
 """
 import sys
 from functools import cache
+from multiprocessing import TimeoutError
 
 import numpy as np
 

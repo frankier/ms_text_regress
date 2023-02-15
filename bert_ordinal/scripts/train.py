@@ -318,7 +318,7 @@ def flatten_dump(d):
     res = {}
     for k, v in d.items():
         if k == "agg_pred":
-            res.update(v)
+            res.update({"pred/" + k: v2 for k, v2 in v.items()})
         else:
             res[k] = v
     return res

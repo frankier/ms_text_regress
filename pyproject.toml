@@ -11,7 +11,7 @@ packages = [{include = "bert_ordinal"}]
 python = "^3.8,!=3.9.7"
 transformers = "^4.22.2"
 
-numba = { version = "^0.56.3", optional = true}
+numba = { version = "^0.56.4", optional = true}
 
 datasets = { version = "^2.5.2", optional = true }
 kaggle = { version = "^1.5.12", optional = true }

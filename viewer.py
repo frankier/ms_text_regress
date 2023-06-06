@@ -102,7 +102,8 @@ def get_task_infos(thresholds):
 
 
 def plot_score_dist(scores):
-    return alt.Chart(pandas.DataFrame(scores)).mark_bar().encode(x="index", y="score")
+    df = pandas.DataFrame({"index": range(len(scores)), "score": scores})
+    return alt.Chart(df).mark_bar().encode(x="index", y="score")
 
 
 def plot_el_mo_dist(el_mo_summary):
@@ -230,9 +231,6 @@ def plot_task(task_info, hidden=None):
         )
 
 
-AVGS = ["median", "mode", "mean"]
-
-
 def multi_conf_mat(selected_df):
     from bert_ordinal.eval import evaluate_predictions
 
@@ -312,8 +310,8 @@ def plot_paths(dump_path, thresholds_path, zip_with=None, zip_with_seg=None):
     if selected_rows and len(selected_rows) == 1:
         selected_record = records[next(get_selected_records())]
         score_chart = None
-        if "scores" in selected_record:
-            score_chart = plot_score_dist(selected_record["scores"])
+        if "label_dist" in selected_record:
+            score_chart = plot_score_dist(selected_record["label_dist"])
         el_mo_chart = None
         if "el_mo_summary" in selected_record:
             el_mo_chart = plot_el_mo_dist(selected_record["el_mo_summary"])
@@ -324,7 +322,14 @@ def plot_paths(dump_path, thresholds_path, zip_with=None, zip_with_seg=None):
             {
                 k: v
                 for k, v in selected_record.items()
-                if k not in ["scores", "el_mo_summary"]
+                if k
+                not in [
+                    "label_dist",
+                    "el_mo_summary",
+                    "input_ids",
+                    "token_type_ids",
+                    "attention_mask",
+                ]
             }
         )
         col1, col2 = st.columns(2)
@@ -332,22 +337,27 @@ def plot_paths(dump_path, thresholds_path, zip_with=None, zip_with_seg=None):
             col1.altair_chart(score_chart.interactive(), use_container_width=True)
         if el_mo_chart is not None:
             col2.altair_chart(el_mo_chart.interactive(), use_container_width=True)
-        if task_info is not None:
+        if task_info is not None and "hidden" in selected_record:
             plot_task(task_info, selected_record["hidden"])
     elif selected_rows and len(selected_rows) > 1:
         selected_df = df.iloc[get_selected_records()]
         group_by_task = st.checkbox("Group by task")
+        has_hidden = "hidden" in selected_df
         if group_by_task:
             task_id = st.selectbox("Task", selected_df["task_ids"].unique())
             selected_task_df = selected_df[selected_df["task_ids"] == task_id]
             st.json(get_review_score_map(selected_task_df), expanded=False)
             with st.expander("Confusion matrices", expanded=True):
                 multi_conf_mat(selected_task_df)
-            with st.expander("Label densities", expanded=True):
-                label_densities(selected_task_df)
+            if has_hidden:
+                with st.expander("Label densities", expanded=True):
+                    label_densities(selected_task_df)
         else:
-            multi_conf_mat(selected_df)
-            label_densities(selected_df)
+            with st.expander("Confusion matrices", expanded=True):
+                multi_conf_mat(selected_df)
+            if has_hidden:
+                with st.expander("Label densities", expanded=True):
+                    label_densities(selected_df)
         # TODO: swarm plots
     else:
         st.text(

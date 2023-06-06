@@ -303,6 +303,14 @@ def pred_and_dump(
             dump_writer.add_info_full(
                 split_name,
                 **{
+                    f"label_dists/refit/{family_name}": [
+                        ld.cpu().numpy() for ld in label_dists
+                    ]
+                },
+            )
+            dump_writer.add_info_full(
+                split_name,
+                **{
                     f"pred/refit/{family_name}/{avg}": v.cpu().numpy()
                     for avg, v in summarized_label_dists.items()
                 },

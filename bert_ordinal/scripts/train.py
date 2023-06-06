@@ -302,7 +302,7 @@ class LatentContinuousOutPredProc(LogitsPassthroughMixin):
     def postprocess(pred_label_dists, batch_num_labels):
         raw_predictions, hiddens = pred_label_dists
         predictions = clip_predictions_np(raw_predictions, batch_num_labels)
-        return {"hidden": hiddens, "pred": predictions}
+        return {"hidden": hiddens.squeeze(-1), "pred": predictions}
 
     @staticmethod
     def dump_callback(batch, result):

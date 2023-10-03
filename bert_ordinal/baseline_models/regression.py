@@ -25,11 +25,17 @@ from bert_ordinal.transformers_utils import (
 )
 
 
-class BertForMultiScaleSequenceRegressionConfig(BertMultiLabelsMixin, BertConfig):
+class LossConfigMixin:
     def __init__(self, loss="mse", **kwargs):
         super().__init__(**kwargs)
 
         self.loss = loss
+
+
+class BertForMultiScaleSequenceRegressionConfig(
+    BertMultiLabelsMixin, LossConfigMixin, BertConfig
+):
+    pass
 
 
 class RegressionLossMixin(LossScalersMixin):
@@ -55,78 +61,15 @@ class RegressionLossMixin(LossScalersMixin):
         ).mean()
 
 
-@add_start_docstrings(
-    """
-    Bert Model transformer with a per-task/scale regression.
-    """,
-    BERT_START_DOCSTRING,
-)
-class BertForMultiScaleSequenceRegression(
-    RegressionLossMixin, BertPreTrainedModel, NormalizeHiddenMixin
-):
-    config_class = BertForMultiScaleSequenceRegressionConfig
-
-    def __init__(self, config):
-        super().__init__(config)
-        self.register_buffer("num_labels", torch.tensor(config.num_labels))
-        self.num_labels: torch.Tensor
-        self.config = config
-
-        self.bert = BertModel(config)
-        classifier_dropout = (
-            config.classifier_dropout
-            if config.classifier_dropout is not None
-            else config.hidden_dropout_prob
-        )
-        self.dropout = nn.Dropout(classifier_dropout)
-        self.classifier = nn.Linear(config.hidden_size, 1)
-        self.scales = torch.nn.ModuleList([nn.Linear(1, 1) for nl in config.num_labels])
-
-        # Initialize weights and apply final processing
-        self.post_init()
-
-    @add_start_docstrings_to_model_forward(
-        BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
-    )
-    def forward(
+class MultiScaleSequenceRegressionMixin(NormalizeHiddenMixin):
+    def forward_pooled(
         self,
-        input_ids: Optional[torch.Tensor] = None,
-        attention_mask: Optional[torch.Tensor] = None,
-        token_type_ids: Optional[torch.Tensor] = None,
-        position_ids: Optional[torch.Tensor] = None,
-        head_mask: Optional[torch.Tensor] = None,
-        inputs_embeds: Optional[torch.Tensor] = None,
+        outputs,
+        pooled_output: torch.Tensor,
         task_ids: Optional[torch.Tensor] = None,
         labels: Optional[torch.Tensor] = None,
-        output_attentions: Optional[bool] = None,
-        output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
-    ) -> Union[Tuple[torch.Tensor], LatentRegressionOutput]:
-        r"""
-        task_ids (`torch.LongTensor` of shape `(batch_size,)`):
-            Task ids for each example. Should be in half-open range `(0,
-            len(config.num_labels]`.
-        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
-            Labels for computing the regression loss. An regression loss (MSE loss) is always used.
-        """
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
-
-        outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            head_mask=head_mask,
-            inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-
-        pooled_output = outputs[1]
-        pooled_output = self.dropout(pooled_output)
+    ):
         hidden_linear = self.classifier(pooled_output)
 
         scaled_outputs = None
@@ -214,3 +157,81 @@ class BertForMultiScaleSequenceRegression(
     def init_scales_range(self):
         for task_id in range(len(self.num_labels)):
             self._init_scale_range(task_id)
+
+
+@add_start_docstrings(
+    """
+    Bert Model transformer with a per-task/scale regression.
+    """,
+    BERT_START_DOCSTRING,
+)
+class BertForMultiScaleSequenceRegression(
+    MultiScaleSequenceRegressionMixin,
+    RegressionLossMixin,
+    BertPreTrainedModel,
+    NormalizeHiddenMixin,
+):
+    config_class = BertForMultiScaleSequenceRegressionConfig
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.register_buffer("num_labels", torch.tensor(config.num_labels))
+        self.num_labels: torch.Tensor
+        self.config = config
+
+        self.bert = BertModel(config)
+        classifier_dropout = (
+            config.classifier_dropout
+            if config.classifier_dropout is not None
+            else config.hidden_dropout_prob
+        )
+        self.dropout = nn.Dropout(classifier_dropout)
+        self.classifier = nn.Linear(config.hidden_size, 1)
+        self.scales = torch.nn.ModuleList([nn.Linear(1, 1) for nl in config.num_labels])
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    @add_start_docstrings_to_model_forward(
+        BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+    )
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        head_mask: Optional[torch.Tensor] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        task_ids: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple[torch.Tensor], LatentRegressionOutput]:
+        r"""
+        task_ids (`torch.LongTensor` of shape `(batch_size,)`):
+            Task ids for each example. Should be in half-open range `(0,
+            len(config.num_labels]`.
+        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+            Labels for computing the regression loss. An regression loss (MSE loss) is always used.
+        """
+        return_dict = (
+            return_dict if return_dict is not None else self.config.use_return_dict
+        )
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+
+        pooled_output = outputs[1]
+        pooled_output = self.dropout(pooled_output)
+        return self.forward_pooled(pooled_output, task_ids, labels, return_dict)

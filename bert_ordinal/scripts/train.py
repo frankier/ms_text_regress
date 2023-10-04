@@ -222,6 +222,30 @@ MODEL_ALIAS_DECODE = dict(
             "has_continuous_output",
             loss="adjust_l1",
         ),
+        modconf(
+            "deb_regress",
+            "has_latent",
+            "is_regress",
+            "has_continuous_output",
+            loss="mse",
+            backbone="deberta",
+        ),
+        modconf(
+            "deb_regress_l1",
+            "has_latent",
+            "is_regress",
+            "has_continuous_output",
+            loss="mae",
+            backbone="deberta",
+        ),
+        modconf(
+            "deb_regress_adjust_l1",
+            "has_latent",
+            "is_regress",
+            "has_continuous_output",
+            loss="adjust_l1",
+            backbone="deberta",
+        ),
         modconf("mono", "has_latent", "is_mono", "has_continuous_output", loss="mse"),
         modconf(
             "mono_l1", "has_latent", "is_mono", "has_continuous_output", loss="mae"
@@ -238,6 +262,7 @@ MODEL_ALIAS_DECODE = dict(
             for link in link_registry
         ),
         modconf("class"),
+        modconf("deb_class", backbone="deberta"),
         modconf("latent_softmax", "has_latent"),
         modconf("threshold", "has_latent", "is_threshold"),
         modconf("fixed_threshold", "has_latent", "is_threshold"),
@@ -406,13 +431,16 @@ class TrainerAndEvaluator:
 
     @classmethod
     def get_model(cls, model_conf, args, num_labels):
-        if args.smoke:
-            base_model = "prajjwal1/bert-tiny"
-            torch.set_num_threads(1)
-        elif args.use_bert_large_wholeword:
-            base_model = "bert-large-cased-whole-word-masking"
+        if model_conf.get("backbone") == "deberta":
+            base_model = "microsoft/deberta-v3-large"
         else:
-            base_model = "bert-base-cased"
+            if args.smoke:
+                base_model = "prajjwal1/bert-tiny"
+                torch.set_num_threads(1)
+            elif args.use_bert_large_wholeword:
+                base_model = "bert-large-cased-whole-word-masking"
+            else:
+                base_model = "bert-base-cased"
 
         if isinstance(num_labels, int):
             return cls.get_single_scale_model(model_conf, args, num_labels, base_model)
@@ -480,37 +508,41 @@ class TrainerAndEvaluator:
         }
         pred_proc = None
         proc_logits = None
-        if model_conf["name"] == "class":
-            from bert_ordinal.baseline_models.classification import (
-                BertForMultiScaleSequenceClassification,
-            )
+        if model_conf["name"] in ("class", "deb_class"):
+            if model_conf["name"] == "deb_class":
+                from bert_ordinal.baseline_models.classification import (
+                    BertForMultiScaleSequenceClassification,
+                )
 
-            model_cls = BertForMultiScaleSequenceClassification
+                model_cls = BertForMultiScaleSequenceClassification
+            else:
+                from bert_ordinal.baseline_models.classification import (
+                    BertForMultiScaleSequenceClassification,
+                )
+
+                model_cls = BertForMultiScaleSequenceClassification
             pred_proc = ClassPredProc
         elif model_conf["has_continuous_output"]:
             if model_conf["is_regress"]:
-                from bert_ordinal.baseline_models.regression import (
-                    BertForMultiScaleSequenceRegression,
-                )
+                if model_conf.get("backbone") == "deberta":
+                    from bert_ordinal.baseline_models.deberta_v2 import (
+                        DebertaV2ForMultiScaleSequenceRegression,
+                    )
 
-                model_cls = BertForMultiScaleSequenceRegression
-                loss_map = {
-                    "regress": "mse",
-                    "regress_l1": "mae",
-                    "regress_adjust_l1": "adjust_l1",
-                }
+                    model_cls = DebertaV2ForMultiScaleSequenceRegression
+                else:
+                    from bert_ordinal.baseline_models.regression import (
+                        BertForMultiScaleSequenceRegression,
+                    )
+
+                    model_cls = BertForMultiScaleSequenceRegression
             else:
                 from bert_ordinal.experimental_regression import (
                     BertForMultiMonotonicTransformSequenceRegression,
                 )
 
                 model_cls = BertForMultiMonotonicTransformSequenceRegression
-                loss_map = {
-                    "mono": "mse",
-                    "mono_l1": "mae",
-                    "mono_adjust_l1": "adjust_l1",
-                }
-            model_kwargs["loss"] = loss_map[args.model]
+            model_kwargs["loss"] = model_conf["loss"]
             pred_proc = LatentContinuousOutPredProc
         elif model_conf["name"] == "latent_softmax":
             from bert_ordinal.ordinal_models.experimental import (

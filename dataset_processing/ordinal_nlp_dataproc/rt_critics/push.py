@@ -19,15 +19,28 @@ def push_dataset(script, name, config=None):
         dataset.push_to_hub(name, config_name=config)
 
 
+def push_subdatasets():
+    for config in CONFIGS:
+        print("Pushing subdataset", config)
+        push_dataset("subdatasets.py", "frankier/multiscale_rt_critics_subsets", config)
+
+
 def main():
     if len(sys.argv) > 1:
+        if len(sys.argv) == 2:
+            dataset = sys.argv[1]
+            if dataset == "processed_multiscale_rt_critics":
+                push_dataset("dataset.py", "frankier/processed_multiscale_rt_critics")
+                return
+            elif dataset == "multiscale_rt_critics_subsets":
+                push_subdatasets()
+                return
         push_dataset(
             "subdatasets.py", "frankier/multiscale_rt_critics_subsets", sys.argv[1]
         )
         return
     push_dataset("dataset.py", "frankier/processed_multiscale_rt_critics")
-    for config in CONFIGS:
-        push_dataset("subdatasets.py", "frankier/multiscale_rt_critics_subsets", config)
+    push_subdatasets()
 
 
 if __name__ == "__main__":

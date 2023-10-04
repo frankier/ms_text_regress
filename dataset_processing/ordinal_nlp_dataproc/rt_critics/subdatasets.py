@@ -1,7 +1,6 @@
 from typing import List
 
 import pandas
-import pyarrow
 from ordinal_nlp_dataproc.rt_critics.dataset import _DESCRIPTION as orig_description
 from sklearn.model_selection import train_test_split
 
@@ -160,15 +159,55 @@ def stratified_split(df, group_keys, test_size=0.25, shuffle=True, random_state=
     return pandas.concat(train_dfs), pandas.concat(test_dfs)
 
 
-def stratified_split_large(
-    df,
-    group_keys,
-    large_threshold,
-    test_size=0.25,
-    small_target="train",
-    shuffle=True,
-    random_state=None,
+def train_test_val_split(
+    df, test_size=0.2, val_size=0.2, shuffle=True, random_state=None
 ):
+    train_df, test_val_df = train_test_split(
+        df, test_size=test_size + val_size, shuffle=shuffle, random_state=random_state
+    )
+    val_df, test_df = train_test_split(
+        test_val_df,
+        test_size=test_size / (test_size + val_size),
+        shuffle=shuffle,
+        random_state=random_state,
+    )
+    return train_df, test_df, val_df
+
+
+def _stratified_split_3way(
+    split_groups, val_size=0.2, test_size=0.2, shuffle=True, random_state=None
+):
+    train_dfs = []
+    test_dfs = []
+    val_dfs = []
+    for group_df in split_groups:
+        train_df, test_df, val_df = train_test_val_split(
+            group_df,
+            test_size=test_size,
+            val_size=val_size,
+            shuffle=shuffle,
+            random_state=random_state,
+        )
+        train_dfs.append(train_df)
+        test_dfs.append(test_df)
+        val_dfs.append(val_df)
+    return train_dfs, test_dfs, val_dfs
+
+
+def stratified_split_3way(
+    df, group_keys, val_size=0.2, test_size=0.2, shuffle=True, random_state=None
+):
+    train_dfs, val_dfs, test_dfs = _stratified_split_3way(
+        (group_df for _key, group_df in df.groupby(group_keys)),
+        val_size=val_size,
+        test_size=test_size,
+        shuffle=shuffle,
+        random_state=random_state,
+    )
+    return pandas.concat(train_dfs), pandas.concat(val_dfs), pandas.concat(test_dfs)
+
+
+def _handle_small(df, group_keys, large_threshold, small_target, inner):
     if small_target == "separate":
         small_dfs = []
     split_groups = []
@@ -178,14 +217,10 @@ def stratified_split_large(
             small_groups.append(group_df)
         else:
             split_groups.append(group_df)
-    train_dfs, test_dfs = _stratified_split(
-        split_groups, test_size=test_size, shuffle=shuffle, random_state=random_state
-    )
+    dfs = inner(split_groups)
     for group_df in small_groups:
-        if small_target == "train":
-            train_dfs.append(group_df)
-        elif small_target == "test":
-            test_dfs.append(group_df)
+        if small_target in dfs:
+            dfs[small_target].append(group_df)
         elif small_target == "separate":
             small_dfs.append(group_df)
         elif small_target == "drop":
@@ -194,13 +229,53 @@ def stratified_split_large(
             raise ValueError(
                 f"Unknown small_target {small_target}, must be one of train, test, separate, drop"
             )
-    train_df = pandas.concat(train_dfs)
-    test_df = pandas.concat(test_dfs)
     if small_target == "separate":
-        small_df = pandas.concat(small_dfs)
-        return train_df, test_df, small_df
-    else:
-        return train_df, test_df
+        dfs["small"] = pandas.concat(small_dfs)
+    return tuple((pandas.concat(df) for df in dfs.values()))
+
+
+def stratified_split_large(
+    df,
+    group_keys,
+    large_threshold,
+    test_size=0.25,
+    small_target="train",
+    shuffle=True,
+    random_state=None,
+):
+    def inner(split_groups):
+        train_dfs, test_dfs = _stratified_split(
+            split_groups,
+            test_size=test_size,
+            shuffle=shuffle,
+            random_state=random_state,
+        )
+        return {"train": train_dfs, "test": test_dfs}
+
+    return _handle_small(df, group_keys, large_threshold, small_target, inner)
+
+
+def stratified_split_large_3way(
+    df,
+    group_keys,
+    large_threshold,
+    val_size=0.2,
+    test_size=0.2,
+    small_target="train",
+    shuffle=True,
+    random_state=None,
+):
+    def inner(split_groups):
+        train_dfs, test_dfs, val_dfs = _stratified_split_3way(
+            split_groups,
+            val_size=val_size,
+            test_size=test_size,
+            shuffle=shuffle,
+            random_state=random_state,
+        )
+        return {"train": train_dfs, "test": test_dfs, "validation": val_dfs}
+
+    return _handle_small(df, group_keys, large_threshold, small_target, inner)
 
 
 def get_dataset_scale_points_rt(dataset) -> List[int]:
@@ -217,12 +292,12 @@ def get_dataset_scale_points_rt(dataset) -> List[int]:
     return dataset_scale_points
 
 
-def sample_multiscale_rt_critics(batch):
-    df = pandas.DataFrame.from_dict(batch.data)
+def sample_multiscale_rt_critics(table):
+    df = table.to_pandas()
     df = df.sample(frac=1, random_state=42).reset_index(drop=True)
     df = downsample_large_groups_groupwise(df, "grade_type", "group_id", 40000)
     df = renumber_groups(df, "group_id")
-    return pyarrow.Table.from_pandas(df)
+    return df
 
 
 def sample_rt_critics_by_critic_min(df, min_reviews=500):
@@ -257,13 +332,8 @@ def load_joined_rt_critics() -> datasets.Dataset:
 def critics_by_critics_ds(min_reviews=500):
     d = load_joined_rt_critics()
     df = sample_rt_critics_by_critic_min(d.to_pandas(), min_reviews=min_reviews)
-    train_df, test_df = stratified_split(df, ["group_id"], random_state=42)
-    dataset = datasets.DatasetDict(
-        {
-            "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
-            "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
-        }
-    )
+    train_df, test_df, val_df = stratified_split_3way(df, ["group_id"], random_state=42)
+    dataset = pandas_dataset_dict(train_df, test_df, val_df)
     dataset = dataset.rename_columns(
         {
             "group_id": "task_ids",
@@ -273,6 +343,16 @@ def critics_by_critics_ds(min_reviews=500):
     num_labels = get_dataset_scale_points_rt(dataset)
     is_multi = True
     return dataset, num_labels, is_multi
+
+
+def pandas_dataset_dict(train, test, validation=None):
+    d = {
+        "train": datasets.Dataset.from_pandas(train, preserve_index=False),
+        "test": datasets.Dataset.from_pandas(test, preserve_index=False),
+    }
+    if validation is not None:
+        d["validation"] = datasets.Dataset.from_pandas(validation, preserve_index=False)
+    return datasets.DatasetDict(d)
 
 
 def load_dataset(name):
@@ -285,16 +365,11 @@ def load_dataset(name):
             if len(group_df) > biggest_group_size:
                 biggest_group_size = len(group_df)
                 biggest_group_df = group_df
-        train_df, test_df = train_test_split(
-            biggest_group_df, test_size=0.25, shuffle=True, random_state=42
+        train_df, test_df, val_df = train_test_val_split(
+            biggest_group_df, val_size=0.2, test_size=0.2, shuffle=True, random_state=42
         )
         num_labels = int(train_df.iloc[0]["scale_points"])
-        dataset = datasets.DatasetDict(
-            {
-                "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
-                "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
-            }
-        )
+        dataset = pandas_dataset_dict(train_df, test_df, val_df)
         dataset = dataset.rename_columns({"review_content": "text"})
         dataset = dataset.remove_columns("group_id")
         is_multi = False
@@ -327,13 +402,10 @@ def load_dataset(name):
         groups = df.groupby(["critic_name", "group_id"])
         df["orig_group_id"] = df["group_id"]
         df["group_id"] = groups.ngroup().astype(int)
-        train_df, test_df = stratified_split(df, ["group_id"], random_state=42)
-        dataset = datasets.DatasetDict(
-            {
-                "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
-                "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
-            }
+        train_df, test_df, val_df = stratified_split_3way(
+            df, ["group_id"], random_state=42
         )
+        dataset = pandas_dataset_dict(train_df, test_df, val_df)
         dataset = dataset.rename_columns(
             {
                 "group_id": "task_ids",
@@ -344,24 +416,17 @@ def load_dataset(name):
         is_multi = True
     elif name == "multiscale_rt_critics":
         d = load_joined_rt_critics()
-        d = d.map(sample_multiscale_rt_critics, batched=True, batch_size=None)
-        df = pandas.DataFrame(d)
-        train_df, test_df = stratified_split_large(
+        df = sample_multiscale_rt_critics(d.data.table)
+        train_df, test_df, val_df = stratified_split_large_3way(
             df, ["grade_type", "group_id"], 10, small_target="drop"
         )
-        dataset = datasets.DatasetDict(
-            {
-                "train": datasets.Dataset.from_pandas(train_df, preserve_index=False),
-                "test": datasets.Dataset.from_pandas(test_df, preserve_index=False),
-            }
-        )
+        dataset = pandas_dataset_dict(train_df, test_df, val_df)
         dataset = dataset.rename_columns(
             {
                 "group_id": "task_ids",
                 "review_content": "text",
             }
         )
-        dataset = dataset.remove_columns("__index_level_0__")
         num_labels = get_dataset_scale_points_rt(dataset)
         is_multi = True
     return dataset, num_labels, is_multi
@@ -386,7 +451,7 @@ _HOMEPAGE = ""
 
 _LICENSE = "CC0"
 
-_VERSION = datasets.Version("1.1.0")
+_VERSION = datasets.Version("1.2.0")
 
 CONFIGS = [
     "rt_critics_one",
@@ -444,6 +509,10 @@ class SubsampledMultiscaleRTCritics(datasets.GeneratorBasedBuilder):
             datasets.SplitGenerator(
                 name=datasets.Split.TEST,
                 gen_kwargs={"split": "test"},
+            ),
+            datasets.SplitGenerator(
+                name=datasets.Split.VALIDATION,
+                gen_kwargs={"split": "validation"},
             ),
         ]
 

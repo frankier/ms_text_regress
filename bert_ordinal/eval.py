@@ -217,16 +217,19 @@ def evaluate_pred_dist_avgs(pred_dist_avgs, labels, num_labels, task_ids=None):
     return res
 
 
-def generate_refits(regressors, scale_points_map, vglm_kwargs):
+def _tagdelay_helper(name, f, *args, **kwargs):
+    return (name, f(*args, **kwargs))
+
+
+def tagdelay(name, f, *args, **kwargs):
     from joblib import delayed
 
+    return delayed(_tagdelay_helper)(name, f, *args, **kwargs)
+
+
+def generate_refits(regressors, scale_points_map, vglm_kwargs):
     from bert_ordinal.baseline_models.skl_wrap import fit
     from bert_ordinal.ordinal_models.vglm import fit_one_task
-
-    def tagdelay(name, f, *args, **kwargs):
-        return delayed(lambda *args, **kwargs: (name, f(*args, **kwargs)))(
-            *args, **kwargs
-        )
 
     for task_id, coefs in regressors.items():
         yield tagdelay(

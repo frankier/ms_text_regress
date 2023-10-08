@@ -785,51 +785,33 @@ class TrainerAndEvaluator:
         return lambda logits, _labels: proc_logits(logits)
 
     def get_trainer(self):
+        kwargs = dict(
+            model=self.model,
+            args=self.training_args,
+            train_dataset=self.dataset["train"],
+            eval_dataset=self.eval_dataset["validation"],
+            compute_metrics=self.compute_metrics,
+            preprocess_logits_for_metrics=self.get_preprocess_logits_for_metrics(),
+            tokenizer=self.tokenizer,
+            optimizers=self.optimizers,
+        )
         if self.model_conf["name"] == "metric":
             from bert_ordinal.ordinal_models.experimental import MetricLearningTrainer
 
             if self.args.sampler != "default":
                 raise ValueError("Custom samplers not supported for metric learning")
 
-            return MetricLearningTrainer(
-                model=self.model,
-                args=self.training_args,
-                train_dataset=self.dataset["train"],
-                eval_dataset=self.eval_dataset["validation"],
-                compute_metrics=self.compute_metrics,
-                preprocess_logits_for_metrics=self.get_preprocess_logits_for_metrics(),
-                tokenizer=self.tokenizer,
-                optimizers=self.optimizers,
-            )
+            return MetricLearningTrainer(**kwargs)
         else:
             if self.args.sampler == "default":
                 self.training_args.group_by_length = True
-                return Trainer(
-                    model=self.model,
-                    args=self.training_args,
-                    train_dataset=self.dataset["train"],
-                    eval_dataset=self.eval_dataset["validation"],
-                    compute_metrics=self.compute_metrics,
-                    preprocess_logits_for_metrics=self.get_preprocess_logits_for_metrics(),
-                    tokenizer=self.tokenizer,
-                    optimizers=self.optimizers,
-                )
+                return Trainer(**kwargs)
             else:
                 from bert_ordinal.ordinal_models.experimental import (
                     CustomSamplerTrainer,
                 )
 
-                return CustomSamplerTrainer(
-                    sampler=self.args.sampler,
-                    model=self.model,
-                    args=self.training_args,
-                    train_dataset=self.dataset["train"],
-                    eval_dataset=self.eval_dataset["validation"],
-                    compute_metrics=self.compute_metrics,
-                    preprocess_logits_for_metrics=self.get_preprocess_logits_for_metrics(),
-                    tokenizer=self.tokenizer,
-                    optimizers=self.optimizers,
-                )
+                return CustomSamplerTrainer(**kwargs)
 
     def train(self):
         self.tokenizer = get_tokenizer()

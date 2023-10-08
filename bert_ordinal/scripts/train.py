@@ -430,7 +430,10 @@ class TrainerAndEvaluator:
     @classmethod
     def get_model(cls, model_conf, args, num_labels):
         if model_conf.get("backbone") == "deberta":
-            base_model = "microsoft/deberta-v3-large"
+            if args.smoke:
+                base_model = "microsoft/deberta-v3-xsmall"
+            else:
+                base_model = "microsoft/deberta-v3-large"
         else:
             if args.smoke:
                 base_model = "prajjwal1/bert-tiny"

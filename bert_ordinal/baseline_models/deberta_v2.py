@@ -33,9 +33,8 @@ class DebertaV2ForMultiScaleSequenceRegression(
 
     def __init__(self, config):
         super().__init__(config)
-
-        num_labels = config.num_labels
-        self.num_labels = num_labels
+        self.register_buffer("num_labels", torch.tensor(config.num_labels))
+        self.num_labels: torch.Tensor
 
         self.deberta = DebertaV2Model(config)
         self.pooler = ContextPooler(config)

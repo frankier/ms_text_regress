@@ -192,6 +192,14 @@ class BertForMultiScaleSequenceRegression(
         # Initialize weights and apply final processing
         self.post_init()
 
+    """
+    task_ids (`torch.LongTensor` of shape `(batch_size,)`):
+        Task ids for each example. Should be in half-open range `(0,
+        len(config.num_labels]`.
+    labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+        Labels for computing the regression loss. An regression loss (MSE loss) is always used.
+    """
+
     @add_start_docstrings_to_model_forward(
         BERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
@@ -209,13 +217,6 @@ class BertForMultiScaleSequenceRegression(
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple[torch.Tensor], LatentRegressionOutput]:
-        r"""
-        task_ids (`torch.LongTensor` of shape `(batch_size,)`):
-            Task ids for each example. Should be in half-open range `(0,
-            len(config.num_labels]`.
-        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
-            Labels for computing the regression loss. An regression loss (MSE loss) is always used.
-        """
         return_dict = (
             return_dict if return_dict is not None else self.config.use_return_dict
         )
@@ -234,4 +235,6 @@ class BertForMultiScaleSequenceRegression(
 
         pooled_output = outputs[1]
         pooled_output = self.dropout(pooled_output)
-        return self.forward_pooled(pooled_output, task_ids, labels, return_dict)
+        return self.forward_pooled(
+            outputs, pooled_output, task_ids, labels, return_dict
+        )

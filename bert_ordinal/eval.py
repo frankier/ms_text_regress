@@ -261,7 +261,7 @@ def ensure_pool(num_workers=0, pool=None):
     if num_workers == 0:
         num_workers = 1
     if pool is None:
-        return Parallel(num_workers, timeout=30)
+        return Parallel(num_workers, timeout=90)
     return pool
 
 

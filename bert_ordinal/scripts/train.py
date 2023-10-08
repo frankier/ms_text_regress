@@ -25,7 +25,7 @@ from bert_ordinal.label_dist import (
     summarize_label_dist,
     summarize_label_dists,
 )
-from bert_ordinal.scripts.utils import get_tokenizer
+from bert_ordinal.scripts.utils import SPLITS, get_tokenizer
 from bert_ordinal.transformers_utils import inference_run, silence_warnings
 
 metric_accuracy = evaluate.load("accuracy")
@@ -398,7 +398,7 @@ class TrainerAndEvaluator:
         dataset, num_labels = load_from_disk_with_labels(args.dataset)
 
         if args.num_samples is not None:
-            for label in ("train", "test"):
+            for label in SPLITS:
                 dataset[label] = (
                     dataset[label].shuffle(seed=42).select(range(args.num_samples))
                 )
@@ -413,13 +413,11 @@ class TrainerAndEvaluator:
 
     @staticmethod
     def prepare_eval_dataset(args, dataset, label_names):
-        eval_train_dataset = prepare_dataset_for_fast_inference(
-            dataset["train"], label_names, sort=not args.dump_results
-        )
-        eval_test_dataset = prepare_dataset_for_fast_inference(
-            dataset["test"], label_names, sort=not args.dump_results
-        )
-        eval_dataset = {"train": eval_train_dataset, "test": eval_test_dataset}
+        eval_dataset = {}
+        for split in SPLITS:
+            eval_dataset[split] = prepare_dataset_for_fast_inference(
+                dataset[split], label_names, sort=not args.dump_results
+            )
         return eval_dataset
 
     @staticmethod

@@ -12,6 +12,7 @@ from transformers.trainer_callback import TrainerCallback
 
 from bert_ordinal.datasets import auto_dataset
 from bert_ordinal.ordinal_models.vglm import link_of_family_name
+from bert_ordinal.scripts.utils import SPLITS
 from bert_ordinal.transformers_utils import auto_pipeline
 
 LOGIT_99 = torch.logit(torch.tensor(0.99))
@@ -180,7 +181,7 @@ def dump_task_affines(model, task_affines, coefs=None):
 
 
 class DumpWriter:
-    def __init__(self, out_base, zip_with=None, segments=("train", "test")):
+    def __init__(self, out_base, zip_with=None, segments=SPLITS):
         self.out_base = out_base
         self.segments = segments
         self.step = 0

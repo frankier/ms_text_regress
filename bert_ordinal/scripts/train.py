@@ -18,7 +18,12 @@ from bert_ordinal import Trainer
 from bert_ordinal.datasets import load_from_disk_with_labels
 from bert_ordinal.dump import DumpWriterCallback
 from bert_ordinal.element_link import link_registry
-from bert_ordinal.eval import add_bests, evaluate_pred_dist_avgs, evaluate_predictions
+from bert_ordinal.eval import (
+    ALL_REFITS,
+    add_bests,
+    evaluate_pred_dist_avgs,
+    evaluate_predictions,
+)
 from bert_ordinal.label_dist import (
     PRED_AVGS,
     clip_predictions_np,
@@ -35,6 +40,10 @@ metric_mse = evaluate.load("mse")
 # All tokenization is done in advance, before any forking, so this seems to be
 # safe.
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+
+REFIT_TIMEOUT = 90
+PARALLEL_BACKEND = "loky"
 
 
 @dataclass
@@ -54,7 +63,8 @@ class ExtraArguments:
     fitted_ordinal: Optional[str] = None
     dump_results: Optional[str] = None
     sampler: str = "default"
-    num_vgam_workers: int = 8
+    refit: str = "same"
+    num_refit_workers: int = 8
     initial_probe: bool = False
     initial_probe_lr: Optional[float] = None
     initial_probe_steps: Optional[float] = None
@@ -369,6 +379,23 @@ class TrainerAndEvaluator:
         self.optimizers = self.get_optimizers(
             self.model_conf, self.model, self.training_args, self.args
         )
+        self.set_refits(self.args.refit)
+
+    def set_refits(self, refit_mode):
+        if refit_mode not in ("all", "none", "same"):
+            raise ValueError(f"Unknown refit mode {refit_mode}")
+        self.refit_mode = refit_mode
+        if refit_mode == "all":
+            self.refits = ALL_REFITS
+        elif refit_mode == "none":
+            self.refits = []
+        else:
+            if self.model_conf["is_regress"]:
+                self.refits = ["linear"]
+            elif self.model_conf["is_ordinal"]:
+                self.refits = ["cumulative", "acat"]
+            else:
+                self.refits = []
 
     @staticmethod
     def get_args():
@@ -646,13 +673,15 @@ class TrainerAndEvaluator:
                 pred_label_dists, batch_num_labels=batch_num_labels
             )
             if self.args.dump_results:
+                # XXX TODO: how to make sure validation results get dumped here?
                 self.dump_writer.add_info_full("test", **flatten_dump(preds))
             if "hidden" in preds:
-                res.update(
-                    self.refit_latent(
-                        task_ids, preds["hidden"], batch_num_labels, labels
+                if self.refit_mode != "none":
+                    res.update(
+                        self.refit_latent(
+                            task_ids, preds["hidden"], batch_num_labels, labels
+                        )
                     )
-                )
             elif self.args.dump_results:
                 # Refit latent is not called, so we need to dump the predictions on the train set here
                 self.log_eval_on_train_data_class()
@@ -717,9 +746,10 @@ class TrainerAndEvaluator:
             self.regressor_buffers,
             dump_writer=self.dump_writer if self.args.dump_results else None,
             dump_callback=self.dump_callback,
-            num_workers=self.args.num_vgam_workers,
+            num_workers=self.args.num_refit_workers,
             pool=self.pool,
             vglm_kwargs=dict(mask_vglm_errors=True, suppress_vglm_output=True),
+            refits=self.refits,
         )
 
     def mk_eval_buffers(self):
@@ -836,11 +866,18 @@ class TrainerAndEvaluator:
             )
             self.dump_writer = dump_writer_cb.dump_writer
             self.trainer.add_callback(dump_writer_cb)
-            if args.num_vgam_workers == 0:
+        if args.refit in ("all", "same"):
+            if args.num_refit_workers == 0:
                 num_workers = 1
             else:
-                num_workers = args.num_vgam_workers
-            pool = Parallel(num_workers, timeout=30)
+                num_workers = args.num_refit_workers
+            print(
+                f"Setting up pool\tBackend: {PARALLEL_BACKEND}\t"
+                + f"Workers: {num_workers}\tTimeout:{REFIT_TIMEOUT}"
+            )
+            pool = Parallel(
+                num_workers, timeout=REFIT_TIMEOUT, backend=PARALLEL_BACKEND
+            )
         if args.dump_initial_model is not None:
             self.trainer.save_model(
                 training_args.output_dir + "/" + args.dump_initial_model

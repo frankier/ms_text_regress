@@ -14,6 +14,9 @@ except ModuleNotFoundError as err:
     raise RuntimeError("bert_ordinal.eval requires numba") from err
 
 
+ALL_REFITS = ("cumulative", "acat", "linear")
+
+
 @numba.njit
 def _jit_qwk(a1: np.ndarray, a2: np.ndarray, num_labels: int) -> float:
     hist1 = np.zeros((num_labels,))
@@ -227,32 +230,35 @@ def tagdelay(name, f, *args, **kwargs):
     return delayed(_tagdelay_helper)(name, f, *args, **kwargs)
 
 
-def generate_refits(regressors, scale_points_map, vglm_kwargs):
+def generate_refits(regressors, scale_points_map, vglm_kwargs, refits=ALL_REFITS):
     from bert_ordinal.baseline_models.skl_wrap import fit
     from bert_ordinal.ordinal_models.vglm import fit_one_task
 
-    for task_id, coefs in regressors.items():
-        yield tagdelay(
-            "cumulative",
-            fit_one_task,
-            task_id,
-            coefs,
-            scale_points_map[task_id],
-            "cumulative",
-            **vglm_kwargs,
-        )
-    for task_id, coefs in regressors.items():
-        yield tagdelay(
-            "acat",
-            fit_one_task,
-            task_id,
-            coefs,
-            scale_points_map[task_id],
-            "acat",
-            **vglm_kwargs,
-        )
-    for task_id, coefs in regressors.items():
-        yield tagdelay("linear", fit, task_id, coefs)
+    if "cumulative" in refits:
+        for task_id, coefs in regressors.items():
+            yield tagdelay(
+                "cumulative",
+                fit_one_task,
+                task_id,
+                coefs,
+                scale_points_map[task_id],
+                "cumulative",
+                **vglm_kwargs,
+            )
+    if "acat" in refits:
+        for task_id, coefs in regressors.items():
+            yield tagdelay(
+                "acat",
+                fit_one_task,
+                task_id,
+                coefs,
+                scale_points_map[task_id],
+                "acat",
+                **vglm_kwargs,
+            )
+    if "linear" in refits:
+        for task_id, coefs in regressors.items():
+            yield tagdelay("linear", fit, task_id, coefs)
 
 
 def ensure_pool(num_workers=0, pool=None):
@@ -344,6 +350,7 @@ def refit_eval(
     num_workers=0,
     pool=None,
     vglm_kwargs=None,
+    refits=ALL_REFITS,
 ):
     if vglm_kwargs is None:
         vglm_kwargs = {}
@@ -369,7 +376,7 @@ def refit_eval(
     bar = tqdm(total=total)
     try:
         for typ, payload in pool(
-            generate_refits(regressors, scale_points_map, vglm_kwargs)
+            generate_refits(regressors, scale_points_map, vglm_kwargs, refits)
         ):
             bar.update(1)
             count += 1

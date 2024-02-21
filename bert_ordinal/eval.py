@@ -380,6 +380,9 @@ def refit_eval(
         for typ, payload in pool(
             generate_refits(regressors, scale_points_map, vglm_kwargs, refits)
         ):
+            #print("Got typ", typ, flush=True)
+            #print("task_id", payload[0], flush=True)
+            #print("coefs.shape", payload[1].shape, flush=True)
             bar.update(1)
             count += 1
             task_id, coefs = payload

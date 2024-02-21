@@ -20,7 +20,7 @@ st.set_page_config(
 LOGIT_99 = torch.logit(torch.tensor(0.99))
 
 
-@st.experimental_memo()
+@st.cache_data()
 def load_data(path, zip_with=None, zip_with_seg=None):
     if zip_with is not None:
         import datasets
@@ -95,7 +95,7 @@ def aggrid_interactive_table(df: pandas.DataFrame):
     return selection
 
 
-@st.experimental_memo()
+@st.cache_data()
 def get_task_infos(thresholds):
     with open(thresholds, "rb") as f:
         return pickle.load(f)
@@ -370,7 +370,7 @@ def plot_paths(dump_path, thresholds_path, zip_with=None, zip_with_seg=None):
             plot_task(task_infos[selected])
 
 
-@st.experimental_memo()
+@st.cache_data()
 def load_checkpoint_index(path):
     with open(pjoin(path, "index.json"), "rb") as f:
         index = orjson.loads(f.read())

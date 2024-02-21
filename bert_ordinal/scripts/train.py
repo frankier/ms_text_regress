@@ -11,7 +11,7 @@ import evaluate
 import numpy as np
 import torch
 from torch.optim.lr_scheduler import LambdaLR
-from transformers import HfArgumentParser, TrainingArguments
+from transformers import HfArgumentParser, TrainingArguments, EarlyStoppingCallback
 from transformers.trainer_pt_utils import nested_numpify
 
 from bert_ordinal import Trainer
@@ -65,6 +65,8 @@ class ExtraArguments:
     sampler: str = "default"
     refit: str = "same"
     num_refit_workers: int = 8
+    early_stop: bool = True
+    predict_on_test: bool = False
     initial_probe: bool = False
     initial_probe_lr: Optional[float] = None
     initial_probe_steps: Optional[float] = None
@@ -195,6 +197,7 @@ def modconf(name, *args, **kwargs):
         "is_mono",
         "is_regress",
         "is_ordinal",
+        "is_class",
         "has_continuous_output",
         "is_threshold",
     }
@@ -268,11 +271,11 @@ MODEL_ALIAS_DECODE = dict(
             loss="adjust_l1",
         ),
         *(
-            modconf(link, "has_latent", "is_ordinal", link=link)
+            modconf(link, "has_latent", "is_ordinal", link=link, is_cumulative=link.endswith("_cumulative"))
             for link in link_registry
         ),
-        modconf("class"),
-        modconf("deb_class", backbone="deberta"),
+        modconf("class", "is_class"),
+        modconf("deb_class", "is_class", backbone="deberta"),
         modconf("latent_softmax", "has_latent"),
         modconf("threshold", "has_latent", "is_threshold"),
         modconf("fixed_threshold", "has_latent", "is_threshold"),
@@ -359,9 +362,29 @@ def flatten_dump(d):
     return res
 
 
+def metric_for_best_model(refit_mode, model_conf):
+    if refit_mode == "none":
+        if model_conf["is_regress"]:
+            return "ms_mae"
+        else:
+            return "median/ms_mae"
+    else:
+        if model_conf["is_regress"]:
+            return "refit/linear/ms_mae"
+        elif model_conf["is_ordinal"]:
+            if model_conf["is_cumulative"]:
+                return "refit/cumulative/median/ms_mae"
+            else:
+                return "refit/acat/median/ms_mae"
+        else:
+            # class
+            return "median/ms_mae"
+
+
 class TrainerAndEvaluator:
-    def __init__(self):
-        self.training_args, self.args = self.get_args()
+    def __init__(self, training_args, args):
+        self.training_args = training_args
+        self.args = args
         self.config_libs(self.args)
         self.model_conf = MODEL_ALIAS_DECODE[self.args.model]
         self.dataset, self.num_labels = self.load_dataset(self.args)
@@ -380,6 +403,15 @@ class TrainerAndEvaluator:
             self.model_conf, self.model, self.training_args, self.args
         )
         self.set_refits(self.args.refit)
+        if self.args.early_stop:
+            self.training_args.load_best_model_at_end = True
+            self.training_args.metric_for_best_model = metric_for_best_model(self.args.refit, self.model_conf)
+        self.tokenizer = get_tokenizer()
+
+    @staticmethod
+    def from_args():
+        training_args, args = TrainerAndEvaluator.get_args()
+        return TrainerAndEvaluator(training_args, args)
 
     def set_refits(self, refit_mode):
         if refit_mode not in ("all", "none", "same"):
@@ -393,23 +425,23 @@ class TrainerAndEvaluator:
             if self.model_conf["is_regress"]:
                 self.refits = ["linear"]
             elif self.model_conf["is_ordinal"]:
-                self.refits = ["cumulative", "acat"]
+                if self.model_conf["is_cumulative"]:
+                    self.refits = ["cumulative"]
+                else:
+                    self.refits = ["acat"]
             else:
                 self.refits = []
 
     @staticmethod
-    def get_args():
-        parser = HfArgumentParser((TrainingArguments, ExtraArguments))
-
+    def get_args(parser=HfArgumentParser((TrainingArguments, ExtraArguments))):
         if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
             # If we pass only one argument to the script and it's the path to a json file,
             # let's parse it to get our arguments.
-            training_args, args = parser.parse_json_file(
+            return parser.parse_json_file(
                 json_file=os.path.abspath(sys.argv[1])
             )
         else:
-            training_args, args = parser.parse_args_into_dataclasses()
-        return training_args, args
+            return parser.parse_args_into_dataclasses()
 
     @staticmethod
     def config_libs(args):
@@ -536,7 +568,7 @@ class TrainerAndEvaluator:
         }
         pred_proc = None
         proc_logits = None
-        if model_conf["name"] in ("class", "deb_class"):
+        if model_conf["is_class"]:
             if model_conf["name"] == "deb_class":
                 from bert_ordinal.baseline_models.classification import (
                     BertForMultiScaleSequenceClassification,
@@ -657,7 +689,10 @@ class TrainerAndEvaluator:
         pred_label_dists, labels = eval_pred
         labels, task_ids, batch_num_labels = self.decode_labels(labels)
 
-        step = self.trainer.state.global_step
+        if getattr(self, "trainer", None) is not None:
+            step = self.trainer.state.global_step
+        else:
+            step = 0
         if self.args.trace_labels_predictions:
             print()
             print(f"Step {step}")
@@ -691,15 +726,14 @@ class TrainerAndEvaluator:
                         preds["pred"], labels, batch_num_labels, task_ids
                     )
                 )
-            if "agg_preds" in preds:
-                evaluate_pred_dist_avgs(
-                    preds["agg_preds"], labels, batch_num_labels, task_ids
-                )
-                if self.model_conf["name"] != "class":
-                    raise ValueError(
-                        f"Do not know how to process metrics for {self.model_conf['name']}"
+            if "agg_pred" in preds:
+                res.update(
+                    evaluate_pred_dist_avgs(
+                        preds["agg_pred"], labels, batch_num_labels, task_ids
                     )
-            self.dump_writer.add_heads("model", self.model)
+                )
+            if self.args.dump_results:
+                self.dump_writer.add_heads("model", self.model)
             add_bests(res)
             return res
 
@@ -813,16 +847,33 @@ class TrainerAndEvaluator:
 
                 return CustomSamplerTrainer(**kwargs)
 
-    def train(self):
-        self.tokenizer = get_tokenizer()
-        args = self.args
-        training_args = self.training_args
+    def setup_pool(self):
+        from joblib import Parallel
 
+        num_refit_workers = self.args.num_refit_workers
+        if num_refit_workers == 0:
+            num_workers = 1
+        else:
+            num_workers = num_refit_workers
+        print(
+            f"Setting up pool\tBackend: {PARALLEL_BACKEND}\t"
+            + f"Workers: {num_workers}\tTimeout:{REFIT_TIMEOUT}"
+        )
+        return Parallel(
+            num_workers, timeout=REFIT_TIMEOUT, backend=PARALLEL_BACKEND
+        )
+
+    def setup_eval_buffers(self):
         (
             self.regressor_buffers,
             self.train_hidden_buffer,
             self.scale_points_map,
         ) = self.mk_eval_buffers()
+
+    def train(self):
+        args = self.args
+        training_args = self.training_args
+        self.setup_eval_buffers()
 
         init_weights(
             training_args,
@@ -841,25 +892,15 @@ class TrainerAndEvaluator:
 
         pool = None
         if args.dump_results:
-            from joblib import Parallel
-
             dump_writer_cb = DumpWriterCallback(
                 args.dump_results, zip_with=relpath(args.dataset, args.dump_results)
             )
             self.dump_writer = dump_writer_cb.dump_writer
             self.trainer.add_callback(dump_writer_cb)
+        if args.early_stop:
+            self.trainer.add_callback(EarlyStoppingCallback(early_stopping_patience=3))
         if args.refit in ("all", "same"):
-            if args.num_refit_workers == 0:
-                num_workers = 1
-            else:
-                num_workers = args.num_refit_workers
-            print(
-                f"Setting up pool\tBackend: {PARALLEL_BACKEND}\t"
-                + f"Workers: {num_workers}\tTimeout:{REFIT_TIMEOUT}"
-            )
-            pool = Parallel(
-                num_workers, timeout=REFIT_TIMEOUT, backend=PARALLEL_BACKEND
-            )
+            pool = self.setup_pool()
         if args.dump_initial_model is not None:
             self.trainer.save_model(
                 training_args.output_dir + "/" + args.dump_initial_model
@@ -868,9 +909,16 @@ class TrainerAndEvaluator:
             self.pool = pool_ctx
             self.trainer.train()
 
+            if args.predict_on_test:
+                metrics = self.trainer.evaluate(self.eval_dataset["test"], metric_key_prefix="test")
+                print("Final metrics")
+                if "label_dists" in metrics:
+                    del metrics["label_dists"]
+                pprint(metrics)
+
 
 def main():
-    TrainerAndEvaluator().train()
+    TrainerAndEvaluator.from_args().train()
 
 
 if __name__ == "__main__":

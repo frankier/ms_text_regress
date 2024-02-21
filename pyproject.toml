@@ -9,7 +9,7 @@ packages = [{include = "bert_ordinal"}]
 
 [tool.poetry.dependencies]
 python = "^3.8,!=3.9.7"
-transformers = { version = "^4.22.2", extras = ["torch"] }
+transformers = { version = "^4.22.2" }
 
 numba = { version = "^0.56.4", optional = true}
 

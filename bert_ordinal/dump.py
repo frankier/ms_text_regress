@@ -180,6 +180,31 @@ def dump_task_affines(model, task_affines, coefs=None):
         pickle.dump(task_outs, f)
 
 
+def is_refittable(model):
+        refittables = []
+        try:
+            from bert_ordinal.baseline_models.regression import (
+                BertForMultiScaleSequenceRegression,
+            )
+            refittables.append(BertForMultiScaleSequenceRegression)
+        except Exception:
+            pass
+        try:
+            from bert_ordinal.experimental_regression import (
+                BertForMultiMonotonicTransformSequenceRegression,
+            )
+            refittables.append(BertForMultiMonotonicTransformSequenceRegression)
+        except Exception:
+            pass
+        try:
+            from bert_ordinal.ordinal_models.bert import BertForMultiScaleOrdinalRegression
+            refittables.append(BertForMultiScaleOrdinalRegression)
+        except Exception:
+            pass
+
+        return isinstance(model, tuple(refittables))
+
+
 class DumpWriter:
     def __init__(self, out_base, zip_with=None, segments=SPLITS):
         self.out_base = out_base
@@ -210,22 +235,7 @@ class DumpWriter:
         os.makedirs(pjoin(self.out_base, path), exist_ok=True)
 
     def dump_refit_heads(self, name, model, coefs=None):
-        from bert_ordinal.baseline_models.regression import (
-            BertForMultiScaleSequenceRegression,
-        )
-        from bert_ordinal.experimental_regression import (
-            BertForMultiMonotonicTransformSequenceRegression,
-        )
-        from bert_ordinal.ordinal_models.bert import BertForMultiScaleOrdinalRegression
-
-        if not isinstance(
-            model,
-            (
-                BertForMultiScaleOrdinalRegression,
-                BertForMultiMonotonicTransformSequenceRegression,
-                BertForMultiScaleSequenceRegression,
-            ),
-        ):
+        if not is_refittable(model):
             return
         os.makedirs(self.out_base, exist_ok=True)
         name_bits = name.split("/")
@@ -247,6 +257,8 @@ class DumpWriter:
                 )
         else:
             assert coefs is None
+            from bert_ordinal.baseline_models.regression import BertForMultiScaleSequenceRegression
+            from bert_ordinal.ordinal_models.bert import BertForMultiScaleOrdinalRegression
             if isinstance(model, BertForMultiScaleOrdinalRegression):
                 dump_task_thresholds(model, full_thresholds_path, model.link)
             elif isinstance(model, BertForMultiScaleSequenceRegression):

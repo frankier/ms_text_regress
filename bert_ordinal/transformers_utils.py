@@ -239,6 +239,8 @@ def silence_warnings():
     logging.set_verbosity_warning()
 
 
+# This is no longer needed in newer versions of Transformers, instead a patched
+# version of accelerate needs to be used
 class NestedTensorTrainerMixin:
     def _pad_across_processes(self, tensor, *args, **kwargs):
         if getattr(tensor, "is_nested", False):

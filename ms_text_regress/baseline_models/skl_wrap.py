@@ -37,7 +37,7 @@ def predict(
     batch_num_labels,
 ):
 
-    from bert_ordinal.label_dist import clip_predictions_np
+    from ms_text_regress.label_dist import clip_predictions_np
 
     preds = []
     for task_id, hidden, nl in zip(task_ids, hiddens, batch_num_labels, strict=True):

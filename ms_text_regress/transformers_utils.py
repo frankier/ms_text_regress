@@ -181,23 +181,23 @@ def auto_load(model):
         config = json.load(f)
     architecture = config["architectures"][0]
     if architecture == "BertForMultiScaleOrdinalRegression":
-        from bert_ordinal import BertForMultiScaleOrdinalRegression
+        from ms_text_regress import BertForMultiScaleOrdinalRegression
 
         return BertForMultiScaleOrdinalRegression.from_pretrained(model)
     elif architecture == "BertForMultiScaleSequenceClassification":
-        from bert_ordinal.baseline_models.classification import (
+        from ms_text_regress.baseline_models.classification import (
             BertForMultiScaleSequenceClassification,
         )
 
         return BertForMultiScaleSequenceClassification.from_pretrained(model)
     elif architecture == "BertForMultiScaleSequenceRegression":
-        from bert_ordinal.baseline_models.regression import (
+        from ms_text_regress.baseline_models.regression import (
             BertForMultiScaleSequenceRegression,
         )
 
         return BertForMultiScaleSequenceRegression.from_pretrained(model)
     elif architecture == "BertForMultiMonotonicTransformSequenceRegression":
-        from bert_ordinal.experimental_regression import (
+        from ms_text_regress.experimental_regression import (
             BertForMultiMonotonicTransformSequenceRegression,
         )
 
@@ -207,13 +207,13 @@ def auto_load(model):
 
 
 def auto_pipeline(model, *args, **kwargs):
-    from bert_ordinal.baseline_models.classification import (
+    from ms_text_regress.baseline_models.classification import (
         BertForMultiScaleSequenceClassification,
     )
-    from bert_ordinal.baseline_models.regression import (
+    from ms_text_regress.baseline_models.regression import (
         BertForMultiScaleSequenceRegression,
     )
-    from bert_ordinal.pipelines import (
+    from ms_text_regress.pipelines import (
         OrdinalRegressionPipeline,
         TextClassificationPipeline,
         TextRegressionPipeline,

@@ -14,24 +14,24 @@ from torch.optim.lr_scheduler import LambdaLR
 from transformers import HfArgumentParser, TrainingArguments, EarlyStoppingCallback
 from transformers.trainer_pt_utils import nested_numpify
 
-from bert_ordinal import Trainer
-from bert_ordinal.datasets import load_from_disk_with_labels
-from bert_ordinal.dump import DumpWriterCallback
-from bert_ordinal.element_link import link_registry
-from bert_ordinal.eval import (
+from ms_text_regress import Trainer
+from ms_text_regress.datasets import load_from_disk_with_labels
+from ms_text_regress.dump import DumpWriterCallback
+from ms_text_regress.element_link import link_registry
+from ms_text_regress.eval import (
     ALL_REFITS,
     add_bests,
     evaluate_pred_dist_avgs,
     evaluate_predictions,
 )
-from bert_ordinal.label_dist import (
+from ms_text_regress.label_dist import (
     PRED_AVGS,
     clip_predictions_np,
     summarize_label_dist,
     summarize_label_dists,
 )
-from bert_ordinal.scripts.utils import SPLITS, get_tokenizer
-from bert_ordinal.transformers_utils import inference_run, silence_warnings
+from ms_text_regress.scripts.utils import SPLITS, get_tokenizer
+from ms_text_regress.transformers_utils import inference_run, silence_warnings
 
 metric_accuracy = evaluate.load("accuracy")
 metric_mae = evaluate.load("mae")
@@ -532,7 +532,7 @@ class TrainerAndEvaluator:
                 )
             proc_logits = None
         elif model_conf["is_ordinal"]:
-            from bert_ordinal import BertForOrdinalRegression
+            from ms_text_regress import BertForOrdinalRegression
 
             model = BertForOrdinalRegression.from_pretrained(
                 base_model,
@@ -570,13 +570,13 @@ class TrainerAndEvaluator:
         proc_logits = None
         if model_conf["is_class"]:
             if model_conf["name"] == "deb_class":
-                from bert_ordinal.baseline_models.classification import (
+                from ms_text_regress.baseline_models.classification import (
                     BertForMultiScaleSequenceClassification,
                 )
 
                 model_cls = BertForMultiScaleSequenceClassification
             else:
-                from bert_ordinal.baseline_models.classification import (
+                from ms_text_regress.baseline_models.classification import (
                     BertForMultiScaleSequenceClassification,
                 )
 
@@ -585,19 +585,19 @@ class TrainerAndEvaluator:
         elif model_conf["has_continuous_output"]:
             if model_conf["is_regress"]:
                 if model_conf.get("backbone") == "deberta":
-                    from bert_ordinal.baseline_models.deberta_v2 import (
+                    from ms_text_regress.baseline_models.deberta_v2 import (
                         DebertaV2ForMultiScaleSequenceRegression,
                     )
 
                     model_cls = DebertaV2ForMultiScaleSequenceRegression
                 else:
-                    from bert_ordinal.baseline_models.regression import (
+                    from ms_text_regress.baseline_models.regression import (
                         BertForMultiScaleSequenceRegression,
                     )
 
                     model_cls = BertForMultiScaleSequenceRegression
             else:
-                from bert_ordinal.experimental_regression import (
+                from ms_text_regress.experimental_regression import (
                     BertForMultiMonotonicTransformSequenceRegression,
                 )
 
@@ -605,7 +605,7 @@ class TrainerAndEvaluator:
             model_kwargs["loss"] = model_conf["loss"]
             pred_proc = LatentContinuousOutPredProc
         elif model_conf["name"] == "latent_softmax":
-            from bert_ordinal.ordinal_models.experimental import (
+            from ms_text_regress.ordinal_models.experimental import (
                 BertForWithLatentAndSoftMax,
             )
 
@@ -619,28 +619,28 @@ class TrainerAndEvaluator:
                 )
 
         elif model_conf["name"] == "threshold":
-            from bert_ordinal.ordinal_models.experimental import (
+            from ms_text_regress.ordinal_models.experimental import (
                 BertForMultiScaleThresholdRegression,
             )
 
             model_cls = BertForMultiScaleThresholdRegression
             proc_logits = cls.proc_logits_passthrough
         elif model_conf["name"] == "fixed_threshold":
-            from bert_ordinal.ordinal_models.experimental import (
+            from ms_text_regress.ordinal_models.experimental import (
                 BertForMultiScaleFixedThresholdRegression,
             )
 
             model_cls = BertForMultiScaleFixedThresholdRegression
             proc_logits = cls.proc_logits_passthrough
         elif model_conf["name"] == "metric":
-            from bert_ordinal.ordinal_models.experimental import (
+            from ms_text_regress.ordinal_models.experimental import (
                 BertForLatentScaleMetricLearning,
             )
 
             model_cls = BertForLatentScaleMetricLearning
             proc_logits = cls.proc_logits_passthrough
         elif model_conf["is_ordinal"]:
-            from bert_ordinal import BertForMultiScaleOrdinalRegression
+            from ms_text_regress import BertForMultiScaleOrdinalRegression
 
             model_cls = BertForMultiScaleOrdinalRegression
             model_kwargs = {
@@ -760,7 +760,7 @@ class TrainerAndEvaluator:
             )
 
     def refit_latent(self, task_ids, test_hiddens, batch_num_labels, test_labels):
-        from bert_ordinal.eval import refit_eval
+        from ms_text_regress.eval import refit_eval
 
         print()
         print(" * Refit * ")
@@ -830,7 +830,7 @@ class TrainerAndEvaluator:
             optimizers=self.optimizers,
         )
         if self.model_conf["name"] == "metric":
-            from bert_ordinal.ordinal_models.experimental import MetricLearningTrainer
+            from ms_text_regress.ordinal_models.experimental import MetricLearningTrainer
 
             if self.args.sampler != "default":
                 raise ValueError("Custom samplers not supported for metric learning")
@@ -841,7 +841,7 @@ class TrainerAndEvaluator:
                 self.training_args.group_by_length = True
                 return Trainer(**kwargs)
             else:
-                from bert_ordinal.ordinal_models.experimental import (
+                from ms_text_regress.ordinal_models.experimental import (
                     CustomSamplerTrainer,
                 )
 

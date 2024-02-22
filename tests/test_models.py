@@ -8,16 +8,16 @@ from itertools import repeat
 import pytest
 from transformers import TrainingArguments
 
-from bert_ordinal import (
+from ms_text_regress import (
     BertForMultiScaleOrdinalRegression,
     BertForOrdinalRegression,
     Trainer,
 )
-from bert_ordinal.baseline_models.classification import (
+from ms_text_regress.baseline_models.classification import (
     BertForMultiScaleSequenceClassification,
 )
-from bert_ordinal.element_link import DEFAULT_LINK_NAME
-from bert_ordinal.ordinal_models.bert import DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE
+from ms_text_regress.element_link import DEFAULT_LINK_NAME
+from ms_text_regress.ordinal_models.bert import DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE
 from datasets import load_dataset
 
 FIXTURE_DIR = os.path.join(

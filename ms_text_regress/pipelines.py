@@ -4,7 +4,7 @@ import torch
 from transformers.pipelines.base import PIPELINE_INIT_ARGS, Pipeline
 from transformers.utils import add_end_docstrings
 
-from bert_ordinal.label_dist import summarize_label_dist
+from ms_text_regress.label_dist import summarize_label_dist
 
 
 @add_end_docstrings(

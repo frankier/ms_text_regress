@@ -22,10 +22,10 @@ from transformers.utils import (
     add_start_docstrings_to_model_forward,
 )
 
-from bert_ordinal.element_link import DEFAULT_LINK_NAME, get_link_by_name
-from bert_ordinal.initialisation import iter_task_normal_cutoffs
-from bert_ordinal.ordinal import ElementWiseAffine, ordinal_loss
-from bert_ordinal.transformers_utils import LatentRegressionOutput
+from ms_text_regress.element_link import DEFAULT_LINK_NAME, get_link_by_name
+from ms_text_regress.initialisation import iter_task_normal_cutoffs
+from ms_text_regress.ordinal import ElementWiseAffine, ordinal_loss
+from ms_text_regress.transformers_utils import LatentRegressionOutput
 
 DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE = "per_task"
 
@@ -146,8 +146,8 @@ class BertForOrdinalRegression(BertPreTrainedModel):
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
-    from bert_ordinal.ordinal import MultiElementWiseAffine, ordinal_loss_multi_labels
-    from bert_ordinal.transformers_utils import (
+    from ms_text_regress.ordinal import MultiElementWiseAffine, ordinal_loss_multi_labels
+    from ms_text_regress.transformers_utils import (
         BertMultiLabelsMixin,
         NormalizeHiddenMixin,
     )

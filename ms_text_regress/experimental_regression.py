@@ -11,11 +11,11 @@ from transformers.models.bert.modeling_bert import BertModel, BertPreTrainedMode
 # from UMNN import MonotonicNN
 from zuko.nn import MonotonicMLP
 
-from bert_ordinal.baseline_models.regression import (
+from ms_text_regress.baseline_models.regression import (
     BertForMultiScaleSequenceRegressionConfig,
     RegressionLossMixin,
 )
-from bert_ordinal.transformers_utils import (
+from ms_text_regress.transformers_utils import (
     LatentRegressionOutput,
     NormalizeHiddenMixin,
     group_labels,

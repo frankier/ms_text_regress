@@ -9,8 +9,8 @@ from transformers.models.bert.modeling_bert import (
     SequenceClassifierOutput,
 )
 
-from bert_ordinal.initialisation import iter_task_normal_cutoffs
-from bert_ordinal.transformers_utils import (
+from ms_text_regress.initialisation import iter_task_normal_cutoffs
+from ms_text_regress.transformers_utils import (
     BertMultiLabelsConfig,
     LatentRegressionOutput,
     NormalizeHiddenMixin,
@@ -463,7 +463,7 @@ class MetricLearningTrainer(Trainer):
         from torch.utils.data import DataLoader
         from transformers.trainer_utils import seed_worker
 
-        from bert_ordinal.samplers import FixedTaskLabelSampler
+        from ms_text_regress.samplers import FixedTaskLabelSampler
 
         train_dataset = self.train_dataset
         data_collator = self.data_collator
@@ -499,7 +499,7 @@ class CustomSamplerTrainer(Trainer):
         from torch.utils.data import DataLoader
         from transformers.trainer_utils import seed_worker
 
-        from bert_ordinal.samplers import (
+        from ms_text_regress.samplers import (
             FixedTaskLabelSampler,
             LabelStratifiedTaskAtATimeSampler,
             TaskAtATimeSampler,

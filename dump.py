@@ -1,16 +1,16 @@
 import argparse
 import sys
 
-from bert_ordinal.baseline_models.classification import (
+from ms_text_regress.baseline_models.classification import (
     BertForMultiScaleSequenceClassification,
 )
-from bert_ordinal.baseline_models.regression import BertForMultiScaleSequenceRegression
-from bert_ordinal.dump import (
+from ms_text_regress.baseline_models.regression import BertForMultiScaleSequenceRegression
+from ms_text_regress.dump import (
     dump_results,
     dump_task_monotonic_funcs,
     dump_task_thresholds,
 )
-from bert_ordinal.transformers_utils import auto_load
+from ms_text_regress.transformers_utils import auto_load
 
 
 def parse_args():

@@ -1,12 +1,12 @@
-import bert_ordinal.ordinal as ord
-import bert_ordinal.ordinal_models.bert as ord_bert
-from bert_ordinal.ordinal import (
+import ms_text_regress.ordinal as ord
+import ms_text_regress.ordinal_models.bert as ord_bert
+from ms_text_regress.ordinal import (
     ordinal_decode_labels_np,
     ordinal_decode_labels_pt,
     ordinal_encode_labels,
 )
-from bert_ordinal.ordinal_models.bert import BertForOrdinalRegression
-from bert_ordinal.transformers_utils import Trainer
+from ms_text_regress.ordinal_models.bert import BertForOrdinalRegression
+from ms_text_regress.transformers_utils import Trainer
 
 __all__ = [
     "ord",

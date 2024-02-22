@@ -128,7 +128,7 @@ def prepare_regressors(
     dump_writer=None,
     dump_callback=None,
 ):
-    from bert_ordinal.transformers_utils import inference_run
+    from ms_text_regress.transformers_utils import inference_run
 
     pos = 0
     positions = {task_id: 0 for task_id in regressor_buffers}
@@ -188,7 +188,7 @@ def fit_one_task(
 
 
 def link_of_family_name(family_name):
-    from bert_ordinal.element_link import get_link_by_name
+    from ms_text_regress.element_link import get_link_by_name
 
     return get_link_by_name("fwd_" + family_name)
 

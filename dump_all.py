@@ -5,8 +5,8 @@ from os.path import join as pjoin
 
 from torch.multiprocessing import Pool
 
-from bert_ordinal.dump import dump_results, dump_task_thresholds
-from bert_ordinal.transformers_utils import auto_load
+from ms_text_regress.dump import dump_results, dump_task_thresholds
+from ms_text_regress.transformers_utils import auto_load
 
 
 def parse_args():

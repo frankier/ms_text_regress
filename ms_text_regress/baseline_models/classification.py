@@ -16,7 +16,7 @@ from transformers.utils import (
     add_start_docstrings_to_model_forward,
 )
 
-from bert_ordinal.transformers_utils import BertMultiLabelsMixin
+from ms_text_regress.transformers_utils import BertMultiLabelsMixin
 
 
 class BertMultiLabelsConfig(BertMultiLabelsMixin, BertConfig):

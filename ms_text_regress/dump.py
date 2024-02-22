@@ -10,10 +10,10 @@ import torch
 from transformers import AutoTokenizer
 from transformers.trainer_callback import TrainerCallback
 
-from bert_ordinal.datasets import auto_dataset
-from bert_ordinal.ordinal_models.vglm import link_of_family_name
-from bert_ordinal.scripts.utils import SPLITS
-from bert_ordinal.transformers_utils import auto_pipeline
+from ms_text_regress.datasets import auto_dataset
+from ms_text_regress.ordinal_models.vglm import link_of_family_name
+from ms_text_regress.scripts.utils import SPLITS
+from ms_text_regress.transformers_utils import auto_pipeline
 
 LOGIT_99 = torch.logit(torch.tensor(0.99))
 
@@ -183,21 +183,21 @@ def dump_task_affines(model, task_affines, coefs=None):
 def is_refittable(model):
         refittables = []
         try:
-            from bert_ordinal.baseline_models.regression import (
+            from ms_text_regress.baseline_models.regression import (
                 BertForMultiScaleSequenceRegression,
             )
             refittables.append(BertForMultiScaleSequenceRegression)
         except Exception:
             pass
         try:
-            from bert_ordinal.experimental_regression import (
+            from ms_text_regress.experimental_regression import (
                 BertForMultiMonotonicTransformSequenceRegression,
             )
             refittables.append(BertForMultiMonotonicTransformSequenceRegression)
         except Exception:
             pass
         try:
-            from bert_ordinal.ordinal_models.bert import BertForMultiScaleOrdinalRegression
+            from ms_text_regress.ordinal_models.bert import BertForMultiScaleOrdinalRegression
             refittables.append(BertForMultiScaleOrdinalRegression)
         except Exception:
             pass
@@ -257,8 +257,8 @@ class DumpWriter:
                 )
         else:
             assert coefs is None
-            from bert_ordinal.baseline_models.regression import BertForMultiScaleSequenceRegression
-            from bert_ordinal.ordinal_models.bert import BertForMultiScaleOrdinalRegression
+            from ms_text_regress.baseline_models.regression import BertForMultiScaleSequenceRegression
+            from ms_text_regress.ordinal_models.bert import BertForMultiScaleOrdinalRegression
             if isinstance(model, BertForMultiScaleOrdinalRegression):
                 dump_task_thresholds(model, full_thresholds_path, model.link)
             elif isinstance(model, BertForMultiScaleSequenceRegression):

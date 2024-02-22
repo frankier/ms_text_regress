@@ -1,7 +1,7 @@
 import numpy as np
 from torch.utils.data import Sampler
 
-from bert_ordinal.vendor.hierarchical_sampler import safe_random_choice
+from ms_text_regress.vendor.hierarchical_sampler import safe_random_choice
 
 
 def ensure_full_batches(instances, batch_size):

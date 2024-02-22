@@ -2,7 +2,7 @@ import torch
 from pytest import approx
 from torch.nn import functional as F
 
-from bert_ordinal.element_link import get_link_by_name
+from ms_text_regress.element_link import get_link_by_name
 
 LABELS = torch.tensor([0, 1, 2, 3, 4])
 NUM_LABELS = 5

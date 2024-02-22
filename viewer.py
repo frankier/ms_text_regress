@@ -10,7 +10,7 @@ import streamlit as st
 import torch
 from sklearn.metrics import confusion_matrix
 
-from bert_ordinal.label_dist import PRED_AVGS
+from ms_text_regress.label_dist import PRED_AVGS
 
 st.set_page_config(
     page_title="Ordinal classification results browser",
@@ -232,7 +232,7 @@ def plot_task(task_info, hidden=None):
 
 
 def multi_conf_mat(selected_df):
-    from bert_ordinal.eval import evaluate_predictions
+    from ms_text_regress.eval import evaluate_predictions
 
     known_preds = [
         pred

@@ -16,7 +16,7 @@ from transformers.utils import (
     add_start_docstrings_to_model_forward,
 )
 
-from bert_ordinal.transformers_utils import (
+from ms_text_regress.transformers_utils import (
     BertMultiLabelsMixin,
     LatentRegressionOutput,
     LossScalersMixin,
@@ -46,7 +46,7 @@ class RegressionLossMixin(LossScalersMixin):
         elif config.loss == "mae":
             self.loss_fct = nn.L1Loss(reduction="none")
         elif config.loss == "adjust_l1":
-            from bert_ordinal.vendor.adjust_smooth_l1_loss import AdjustSmoothL1Loss
+            from ms_text_regress.vendor.adjust_smooth_l1_loss import AdjustSmoothL1Loss
 
             self.loss_fct = AdjustSmoothL1Loss(
                 num_features=1, beta=1.0, reduction="none"

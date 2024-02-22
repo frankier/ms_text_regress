@@ -11,7 +11,7 @@ from transformers.models.deberta_v2.modeling_deberta_v2 import (
     StableDropout,
 )
 
-from bert_ordinal.transformers_utils import BertMultiLabelsMixin
+from ms_text_regress.transformers_utils import BertMultiLabelsMixin
 
 from .regression import (
     LossConfigMixin,

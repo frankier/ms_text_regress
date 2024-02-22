@@ -233,8 +233,8 @@ def tagdelay(name, f, *args, **kwargs):
 
 
 def generate_refits(regressors, scale_points_map, vglm_kwargs, refits=ALL_REFITS):
-    from bert_ordinal.baseline_models.skl_wrap import fit
-    from bert_ordinal.ordinal_models.vglm import fit_one_task
+    from ms_text_regress.baseline_models.skl_wrap import fit
+    from ms_text_regress.ordinal_models.vglm import fit_one_task
 
     if "cumulative" in refits:
         for task_id, coefs in regressors.items():
@@ -283,7 +283,7 @@ def pred_and_dump(
     dump_writer=None,
 ):
     if family_name == "linear":
-        from bert_ordinal.baseline_models.skl_wrap import predict
+        from ms_text_regress.baseline_models.skl_wrap import predict
 
         preds = predict(
             coefs,
@@ -299,8 +299,8 @@ def pred_and_dump(
             )
         return preds
     else:
-        from bert_ordinal.label_dist import summarize_label_dists
-        from bert_ordinal.ordinal_models.vglm import label_dists_from_coefs
+        from ms_text_regress.label_dist import summarize_label_dists
+        from ms_text_regress.ordinal_models.vglm import label_dists_from_coefs
 
         label_dists = label_dists_from_coefs(
             family_name,
@@ -358,7 +358,7 @@ def refit_eval(
         vglm_kwargs = {}
     from tqdm.auto import tqdm
 
-    from bert_ordinal.ordinal_models.vglm import prepare_regressors
+    from ms_text_regress.ordinal_models.vglm import prepare_regressors
 
     res = {}
     train_hiddens, regressors = prepare_regressors(

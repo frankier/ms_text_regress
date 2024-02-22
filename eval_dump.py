@@ -4,8 +4,8 @@ from pprint import pprint
 
 import pandas
 
-from bert_ordinal.eval import evaluate_pred_dist_avgs
-from bert_ordinal.label_dist import PRED_AVGS
+from ms_text_regress.eval import evaluate_pred_dist_avgs
+from ms_text_regress.label_dist import PRED_AVGS
 
 
 def parse_args():

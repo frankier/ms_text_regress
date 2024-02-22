@@ -1,0 +1,42 @@
+{% set data = load_setup_py_data() %}
+
+package:
+  name: ms-text-regress
+  version: "0.1"
+
+source:
+  path: ..
+
+build:
+  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed -vv .
+
+requirements:
+  host:
+    - python
+    - pip
+  run:
+    - python
+    - datasets
+    - kaggle
+    - evaluate
+    - tensorboardX
+    - numba
+    - scikit-learn
+    - transformers
+    - rpy2
+    - orjson
+
+test:
+  source_files:
+    - tests
+  requires:
+    - pytest
+    - pytest-cov
+  commands:
+    - pytest
+
+about:
+  home: https://github.com/frankier/ms_text_regress
+  summary: "Multi-scale text regression"
+  license: Apache
+  license_file: LICENSE

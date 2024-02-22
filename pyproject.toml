@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "bert-ordinal"
+name = "ms-text-regress"
 version = "0.1.0"
-description = "Tools for doing ordinal regression with huggingface transformers/BERT"
+description = "Tools for doing multi-sscale text regression with huggingface transformers"
 authors = ["Frankie Robertson <frankie@robertson.name>"]
 license = "Apache-v2"
 readme = "README.md"
-packages = [{include = "bert_ordinal"}]
+packages = [{include = "ms_text_regress"}]
 
 [tool.poetry.dependencies]
 python = "^3.8,!=3.9.7"

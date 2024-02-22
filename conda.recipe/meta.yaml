@@ -14,6 +14,10 @@ requirements:
   host:
     - python
     - pip
+  build:
+    - python
+    - pip
+    - poetry
   run:
     - python
     - datasets

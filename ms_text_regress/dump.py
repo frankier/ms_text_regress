@@ -190,13 +190,6 @@ def is_refittable(model):
         except Exception:
             pass
         try:
-            from ms_text_regress.experimental_regression import (
-                BertForMultiMonotonicTransformSequenceRegression,
-            )
-            refittables.append(BertForMultiMonotonicTransformSequenceRegression)
-        except Exception:
-            pass
-        try:
             from ms_text_regress.ordinal_models.bert import BertForMultiScaleOrdinalRegression
             refittables.append(BertForMultiScaleOrdinalRegression)
         except Exception:

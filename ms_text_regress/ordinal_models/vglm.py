@@ -47,6 +47,18 @@ def vglm(
         null_conn = base.textConnection(ro.NULL, "w")
         base.sink(null_conn, type="message")
         base.sink(null_conn)
+    # Trace
+    import os, time
+    pid = os.getpid()
+    ts = time.time()
+    naninfs = df.isin([np.nan, np.inf, -np.inf]).to_numpy().flatten().nonzero()
+    if len(naninfs):
+        with open(f"/scratch/project_2004993/frankier/debuglog_{pid}_{ts}.txt", "w") as outf:
+            print(naninfs, file=outf)
+            print(file=outf)
+            print(file=outf)
+            print(df.to_csv(), file=outf)
+    # End trace
     try:
         with localconverter(ro.default_converter + pandas2ri.converter):
             result = vgam.vglm(f"{y_var} ~ {x_var}", data=df, family=family)
@@ -64,10 +76,12 @@ def fill_missing_coefs(coefs, labels, num_labels=None):
     represented_indices = labels.sort_values().unique()
     if num_labels is None:
         num_labels = represented_indices[-1] + 1
-    inv = np.full(num_labels - 1, -1, dtype=np.int)
+    inv = np.full(num_labels - 1, -1, dtype=int)
     for i, x in enumerate(represented_indices[:-1]):
         inv[x] = i
-    coefs_full = np.empty((2, num_labels - 1), dtype=np.float)
+    # BUG IS HERE?!?
+    # This wsa np.empty(..). Could this cause a segmentation fault?
+    coefs_full = np.full((2, num_labels - 1), np.nan, dtype=float)
     intercept_range = coefs[0, -1] - coefs[0, 0]
     prev_src_idx = None
     for dest_idx, src_idx in enumerate(inv):
@@ -179,9 +193,10 @@ def fit_one_task(
     df = DataFrame({"xs": xs, "ys": ys})
     try:
         coefs = vglm(df, "xs", "ys", family_name, scale_points, **kwargs)
-    except RRuntimeError:
+    except RRuntimeError as exc:
         if not mask_vglm_errors:
             raise
+        print(f"Warning: vglm failed for task {task_id}: {exc}")
         return task_id, None
     else:
         return task_id, coefs
@@ -210,6 +225,7 @@ def label_dists_from_coefs(
         else:
             intercepts = coefs[task_id][0, :]
             coef = coefs[task_id][1, :]
+            print("hidden", hidden)
             logits = hidden.squeeze() * coef + intercepts
             label_dists.append(link.label_dist_from_logits(torch.tensor(logits)))
     return label_dists

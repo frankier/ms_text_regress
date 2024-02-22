@@ -22,8 +22,6 @@ streamlit = {version = "^1.15.1", optional = true}
 streamlit-aggrid = {version = "^0.3.3", optional = true}
 rpy2 = "^3.5.6"
 orjson = "^3.8.4"
-zuko = "^0.0.8"
-umnn = "^1.68"
 
 [tool.poetry.extras]
 demos = ["datasets", "kaggle", "evaluate", "tensorboardX", "numba", "scikit-learn"]

@@ -596,12 +596,6 @@ class TrainerAndEvaluator:
                     )
 
                     model_cls = BertForMultiScaleSequenceRegression
-            else:
-                from ms_text_regress.experimental_regression import (
-                    BertForMultiMonotonicTransformSequenceRegression,
-                )
-
-                model_cls = BertForMultiMonotonicTransformSequenceRegression
             model_kwargs["loss"] = model_conf["loss"]
             pred_proc = LatentContinuousOutPredProc
         elif model_conf["name"] == "latent_softmax":

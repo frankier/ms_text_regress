@@ -1,8 +1,10 @@
-import pandas
-from ms_text_regress.label_dist import PRED_AVGS
-import orjson
 import argparse
+
+import orjson
+import pandas
 import statsmodels.formula.api as smf
+
+from ms_text_regress.label_dist import PRED_AVGS
 
 
 def load_data(path, zip_with=None, zip_with_seg=None):
@@ -20,15 +22,7 @@ def load_data(path, zip_with=None, zip_with_seg=None):
         with open(path, "rb") as f:
             records = [orjson.loads(line) for line in f]
     df = pandas.DataFrame(
-        {
-            k: row[k]
-            for k in [
-                "label",
-                "scale_points",
-                "task_ids",
-                "hidden"
-            ]
-        }
+        {k: row[k] for k in ["label", "scale_points", "task_ids", "hidden"]}
         for row in records
     )
     return df
@@ -54,7 +48,7 @@ def main():
     idx = 1
     for task_id, grp_df in groups:
         print(f"{idx}/{len(groups)}")
-        results = smf.ols('label ~ hidden + I(hidden**2)', data=grp_df).fit()
+        results = smf.ols("label ~ hidden + I(hidden**2)", data=grp_df).fit()
         pvalues.append(results.pvalues[2])
         idx += 1
     print(pvalues)
@@ -67,7 +61,6 @@ def main():
     print(sum((1 for p in pvalues if p <= 0.01 / len(pvalues))))
     print(sum((1 for p in pvalues if p <= 0.01 / len(pvalues))) / len(pvalues))
 
-        
 
 if __name__ == "__main__":
     main()

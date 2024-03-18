@@ -394,12 +394,16 @@ def main():
             checkpoint = st.select_slider("Checkpoint", list(chkpt_dict.keys()))
         selected_checkpoint = chkpt_dict[checkpoint]
         plot_paths(
-            pjoin(args.multi, selected_checkpoint["dump"])
-            if "dump" in selected_checkpoint
-            else None,
-            pjoin(args.multi, selected_checkpoint["thresholds"])
-            if "thresholds" in selected_checkpoint
-            else None,
+            (
+                pjoin(args.multi, selected_checkpoint["dump"])
+                if "dump" in selected_checkpoint
+                else None
+            ),
+            (
+                pjoin(args.multi, selected_checkpoint["thresholds"])
+                if "thresholds" in selected_checkpoint
+                else None
+            ),
             zip_with=pjoin(args.multi, zip_with) if zip_with is not None else None,
             zip_with_seg=ds_split,
         )

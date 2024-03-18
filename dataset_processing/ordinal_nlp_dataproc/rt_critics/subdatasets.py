@@ -1,10 +1,9 @@
 from typing import List
 
+import datasets
 import pandas
 from ordinal_nlp_dataproc.rt_critics.dataset import _DESCRIPTION as orig_description
 from sklearn.model_selection import train_test_split
-
-import datasets
 
 _DESCRIPTION = __doc__ = (
     """

@@ -11,7 +11,7 @@ import evaluate
 import numpy as np
 import torch
 from torch.optim.lr_scheduler import LambdaLR
-from transformers import HfArgumentParser, TrainingArguments, EarlyStoppingCallback
+from transformers import EarlyStoppingCallback, HfArgumentParser, TrainingArguments
 from transformers.trainer_pt_utils import nested_numpify
 
 from ms_text_regress import Trainer
@@ -135,9 +135,11 @@ def init_weights(training_args, args, model_conf, model, tokenizer, dataset):
         model.set_ordinal_heads(torch.load(args.fitted_ordinal))
     if args.initial_probe:
         linear_probe_args = TrainingArguments(
-            learning_rate=args.initial_probe_lr
-            if args.initial_probe_lr is not None
-            else training_args.learning_rate,
+            learning_rate=(
+                args.initial_probe_lr
+                if args.initial_probe_lr is not None
+                else training_args.learning_rate
+            ),
             max_steps=args.initial_probe_steps or -1,
             num_train_epochs=1.0,
             prediction_loss_only=True,
@@ -271,7 +273,13 @@ MODEL_ALIAS_DECODE = dict(
             loss="adjust_l1",
         ),
         *(
-            modconf(link, "has_latent", "is_ordinal", link=link, is_cumulative=link.endswith("_cumulative"))
+            modconf(
+                link,
+                "has_latent",
+                "is_ordinal",
+                link=link,
+                is_cumulative=link.endswith("_cumulative"),
+            )
             for link in link_registry
         ),
         modconf("class", "is_class"),
@@ -405,7 +413,9 @@ class TrainerAndEvaluator:
         self.set_refits(self.args.refit)
         if self.args.early_stop:
             self.training_args.load_best_model_at_end = True
-            self.training_args.metric_for_best_model = metric_for_best_model(self.args.refit, self.model_conf)
+            self.training_args.metric_for_best_model = metric_for_best_model(
+                self.args.refit, self.model_conf
+            )
         self.tokenizer = get_tokenizer()
 
     @staticmethod
@@ -437,9 +447,7 @@ class TrainerAndEvaluator:
         if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
             # If we pass only one argument to the script and it's the path to a json file,
             # let's parse it to get our arguments.
-            return parser.parse_json_file(
-                json_file=os.path.abspath(sys.argv[1])
-            )
+            return parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
         else:
             return parser.parse_args_into_dataclasses()
 
@@ -824,7 +832,9 @@ class TrainerAndEvaluator:
             optimizers=self.optimizers,
         )
         if self.model_conf["name"] == "metric":
-            from ms_text_regress.ordinal_models.experimental import MetricLearningTrainer
+            from ms_text_regress.ordinal_models.experimental import (
+                MetricLearningTrainer,
+            )
 
             if self.args.sampler != "default":
                 raise ValueError("Custom samplers not supported for metric learning")
@@ -853,9 +863,7 @@ class TrainerAndEvaluator:
             f"Setting up pool\tBackend: {PARALLEL_BACKEND}\t"
             + f"Workers: {num_workers}\tTimeout:{REFIT_TIMEOUT}"
         )
-        return Parallel(
-            num_workers, timeout=REFIT_TIMEOUT, backend=PARALLEL_BACKEND
-        )
+        return Parallel(num_workers, timeout=REFIT_TIMEOUT, backend=PARALLEL_BACKEND)
 
     def setup_eval_buffers(self):
         (
@@ -904,7 +912,9 @@ class TrainerAndEvaluator:
             self.trainer.train()
 
             if args.predict_on_test:
-                metrics = self.trainer.evaluate(self.eval_dataset["test"], metric_key_prefix="test")
+                metrics = self.trainer.evaluate(
+                    self.eval_dataset["test"], metric_key_prefix="test"
+                )
                 print("Final metrics")
                 if "label_dists" in metrics:
                     del metrics["label_dists"]

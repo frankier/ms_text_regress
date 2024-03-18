@@ -5,6 +5,7 @@ Originally Apache-v2 licensed.
 
 https://github.com/KevinMusgrave/pytorch-metric-learning/blob/345cb2b0cabfd39cc7a25ff2a81fa29adc3ea885/src/pytorch_metric_learning/samplers/hierarchical_sampler.py
 """
+
 import itertools
 from collections import defaultdict
 

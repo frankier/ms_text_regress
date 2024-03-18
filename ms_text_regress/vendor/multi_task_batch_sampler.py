@@ -1,6 +1,7 @@
 """Implements a distributed sampler to sample different tasks with
 temperature sampling in a way to make sure that the same task is
 selected in each core."""
+
 from typing import List, Optional, TypeVar
 
 import numpy as np

@@ -12,10 +12,9 @@ as standardising the ratings onto several integer, ordinal scales.
 
 import os
 
+import datasets
 import pandas
 from sklearn.model_selection import train_test_split
-
-import datasets
 
 
 def split_dfs(df):

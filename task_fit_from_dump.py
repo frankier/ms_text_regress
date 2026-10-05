@@ -2,10 +2,10 @@ import argparse
 import json
 from pprint import pprint
 
+import orjson
 import pandas
 
 from ms_text_regress.label_dist import PRED_AVGS
-import orjson
 
 
 def load_data(path, zip_with=None, zip_with_seg=None):
@@ -30,7 +30,7 @@ def load_data(path, zip_with=None, zip_with_seg=None):
                 "scale_points",
                 "critic_name",
                 "task_ids",
-                "pred/refit/linear"
+                "pred/refit/linear",
             ]
         }
         for row in records

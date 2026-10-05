@@ -1,9 +1,8 @@
 import os
 import sys
 
-from ordinal_nlp_dataproc.rt_critics.subdatasets import CONFIGS
-
 import datasets
+from ordinal_nlp_dataproc.rt_critics.subdatasets import CONFIGS
 
 
 def push_dataset(script, name, config=None):

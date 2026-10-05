@@ -146,7 +146,10 @@ class BertForOrdinalRegression(BertPreTrainedModel):
 
 
 if packaging.version.parse(torch.__version__) >= packaging.version.parse("1.13"):
-    from ms_text_regress.ordinal import MultiElementWiseAffine, ordinal_loss_multi_labels
+    from ms_text_regress.ordinal import (
+        MultiElementWiseAffine,
+        ordinal_loss_multi_labels,
+    )
     from ms_text_regress.transformers_utils import (
         BertMultiLabelsMixin,
         NormalizeHiddenMixin,

@@ -4,7 +4,9 @@ import sys
 from ms_text_regress.baseline_models.classification import (
     BertForMultiScaleSequenceClassification,
 )
-from ms_text_regress.baseline_models.regression import BertForMultiScaleSequenceRegression
+from ms_text_regress.baseline_models.regression import (
+    BertForMultiScaleSequenceRegression,
+)
 from ms_text_regress.dump import (
     dump_results,
     dump_task_monotonic_funcs,

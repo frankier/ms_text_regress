@@ -181,21 +181,25 @@ def dump_task_affines(model, task_affines, coefs=None):
 
 
 def is_refittable(model):
-        refittables = []
-        try:
-            from ms_text_regress.baseline_models.regression import (
-                BertForMultiScaleSequenceRegression,
-            )
-            refittables.append(BertForMultiScaleSequenceRegression)
-        except Exception:
-            pass
-        try:
-            from ms_text_regress.ordinal_models.bert import BertForMultiScaleOrdinalRegression
-            refittables.append(BertForMultiScaleOrdinalRegression)
-        except Exception:
-            pass
+    refittables = []
+    try:
+        from ms_text_regress.baseline_models.regression import (
+            BertForMultiScaleSequenceRegression,
+        )
 
-        return isinstance(model, tuple(refittables))
+        refittables.append(BertForMultiScaleSequenceRegression)
+    except Exception:
+        pass
+    try:
+        from ms_text_regress.ordinal_models.bert import (
+            BertForMultiScaleOrdinalRegression,
+        )
+
+        refittables.append(BertForMultiScaleOrdinalRegression)
+    except Exception:
+        pass
+
+    return isinstance(model, tuple(refittables))
 
 
 class DumpWriter:
@@ -250,8 +254,13 @@ class DumpWriter:
                 )
         else:
             assert coefs is None
-            from ms_text_regress.baseline_models.regression import BertForMultiScaleSequenceRegression
-            from ms_text_regress.ordinal_models.bert import BertForMultiScaleOrdinalRegression
+            from ms_text_regress.baseline_models.regression import (
+                BertForMultiScaleSequenceRegression,
+            )
+            from ms_text_regress.ordinal_models.bert import (
+                BertForMultiScaleOrdinalRegression,
+            )
+
             if isinstance(model, BertForMultiScaleOrdinalRegression):
                 dump_task_thresholds(model, full_thresholds_path, model.link)
             elif isinstance(model, BertForMultiScaleSequenceRegression):

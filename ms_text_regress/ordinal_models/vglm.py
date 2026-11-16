@@ -48,12 +48,16 @@ def vglm(
         base.sink(null_conn, type="message")
         base.sink(null_conn)
     # Trace
-    import os, time
+    import os
+    import time
+
     pid = os.getpid()
     ts = time.time()
     naninfs = df.isin([np.nan, np.inf, -np.inf]).to_numpy().flatten().nonzero()
     if len(naninfs):
-        with open(f"/scratch/project_2004993/frankier/debuglog_{pid}_{ts}.txt", "w") as outf:
+        with open(
+            f"/scratch/project_2004993/frankier/debuglog_{pid}_{ts}.txt", "w"
+        ) as outf:
             print(naninfs, file=outf)
             print(file=outf)
             print(file=outf)

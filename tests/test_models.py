@@ -2,10 +2,12 @@
 This module tests the models, but note that they are really more like smoke
 tests, just to test that training and evaluation can run on a single example.
 """
+
 import os
 from itertools import repeat
 
 import pytest
+from datasets import load_dataset
 from transformers import TrainingArguments
 
 from ms_text_regress import (
@@ -18,7 +20,6 @@ from ms_text_regress.baseline_models.classification import (
 )
 from ms_text_regress.element_link import DEFAULT_LINK_NAME
 from ms_text_regress.ordinal_models.bert import DEFAULT_MULTI_LABEL_DISCRIMINATION_MODE
-from datasets import load_dataset
 
 FIXTURE_DIR = os.path.join(
     os.path.dirname(os.path.realpath(__file__)),
